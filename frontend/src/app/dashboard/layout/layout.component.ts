@@ -3,8 +3,9 @@ import { Event, NavigationEnd, Router } from '@angular/router';
 import { DashboardService } from '../dashboard.service';
 
 @Component({
-  selector: 'dashboard-layout',
-  templateUrl: './layout.component.html',
+    selector: 'dashboard-layout',
+    templateUrl: './layout.component.html',
+    standalone: false
 })
 export class LayoutComponent implements OnInit {
   constructor(private router: Router, private dashboard: DashboardService) {

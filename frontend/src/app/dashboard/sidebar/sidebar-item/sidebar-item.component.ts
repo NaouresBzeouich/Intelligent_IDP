@@ -2,8 +2,9 @@ import { Component, Input } from '@angular/core';
 import { DashboardService } from '../../dashboard.service';
 
 @Component({
-  selector: 'sidebar-item',
-  templateUrl: './sidebar-item.component.html',
+    selector: 'sidebar-item',
+    templateUrl: './sidebar-item.component.html',
+    standalone: false
 })
 export class SidebarItemComponent {
   @Input() title: string;

@@ -1,9 +1,10 @@
 import { Component } from '@angular/core';
 
 @Component({
-  selector: 'app-sidebar-new-item',
-  templateUrl: './sidebar-new-item.component.html',
-  styleUrls: ['./sidebar-new-item.component.css' ]
+    selector: 'app-sidebar-new-item',
+    templateUrl: './sidebar-new-item.component.html',
+    styleUrls: ['./sidebar-new-item.component.css'],
+    standalone: false
 })
 export class SidebarNewItemComponent {
 
