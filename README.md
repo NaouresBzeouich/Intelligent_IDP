@@ -50,3 +50,4 @@ idp-intelligent-dashboard/
 │   └── workflows/
 └── README.md
 ```
+![alt text](Report/image.png)
