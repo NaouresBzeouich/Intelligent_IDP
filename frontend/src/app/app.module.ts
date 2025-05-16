@@ -10,6 +10,7 @@ import { SidebarComponent } from './dashboard/sidebar/sidebar/sidebar.component'
 import { SidebarItemComponent } from './dashboard/sidebar/sidebar-item/sidebar-item.component';
 import { SidebarItemsComponent } from './dashboard/sidebar/sidebar-items/sidebar-items.component';
 import { SidebarHeaderComponent } from './dashboard/sidebar/sidebar-header/sidebar-header.component';
+import { FormsModule } from '@angular/forms';
 
 // pages
 import { HomeComponent } from './pages/home/home.component';
@@ -17,6 +18,10 @@ import { HomeComponent } from './pages/home/home.component';
 // others
 import { ContentComponent } from './components/content/content.component';
 import { SidebarNewItemComponent } from './dashboard/sidebar/sidebar-new-item/sidebar-new-item.component';
+import { HighlightModule, HIGHLIGHT_OPTIONS } from 'ngx-highlightjs';
+import { HttpClientModule } from '@angular/common/module.d-CnjH8Dlt';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { ChatComponent } from './components/chat/chat.component';
 
 @NgModule({
   declarations: [
@@ -28,7 +33,6 @@ import { SidebarNewItemComponent } from './dashboard/sidebar/sidebar-new-item/si
     SidebarItemComponent,
     SidebarItemsComponent,
     SidebarHeaderComponent,
-
     // pages
     HomeComponent,
 
@@ -37,8 +41,17 @@ import { SidebarNewItemComponent } from './dashboard/sidebar/sidebar-new-item/si
      SidebarNewItemComponent,
 
   ],
-  imports: [BrowserModule, AppRoutingModule],
-  providers: [],
+  imports: [BrowserModule, AppRoutingModule,HighlightModule,FormsModule,ChatComponent,
+],
+  providers: [provideHttpClient(withInterceptorsFromDi()),
+     {
+      provide: HIGHLIGHT_OPTIONS,
+      useValue: {
+        fullLibraryLoader: () => import('highlight.js'),
+      },
+    },],
   bootstrap: [AppComponent],
 })
-export class AppModule {}
+export class AppModule {
+  
+}
