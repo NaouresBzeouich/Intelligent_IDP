@@ -7,7 +7,7 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-client = Groq(api_key=("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"))
+client = Groq(api_key=("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"))
 
 @app.route('/chat', methods=['GET'])
 def chat():
