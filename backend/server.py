@@ -21,9 +21,9 @@ def chat():
                     "role": "system",
                     "content": (
                         "in the context of my internal development platform i want some recommendations "
-                        "to the architectures i should choose between on prem, azure, aws, which tech stack should i choose.. "
+                        "to the architectures i should choose between on prem, azure, aws, which tech stack should i choose.. kubernetes is no option "
                         "for prem ignore the buying, suppose the servers are already there, ignore the maintenance costs. "
-                        "make one strict final decision for each environment if many are needed"
+                        "the expected response should be a strict final decision at the begginging of the answer, followed by explainations, "
                     )
                 },
                 {
