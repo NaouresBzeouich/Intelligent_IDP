@@ -1,0 +1,55 @@
+name: Docker CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+env:
+  IMAGE_NAME: yourdockerhubusername/yourapp
+  DOCKERHUB_USERNAME: yourdockerhubusername
+  DOCKERHUB_PAT: your_dockerhub_pat_here
+  SSH_USER: youruser
+  SSH_HOST: your.onprem.server.ip
+  SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to DockerHub
+        run: echo "${{ env.DOCKERHUB_PAT }}" | docker login -u $DOCKERHUB_USERNAME --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build -t $IMAGE_NAME:${{ github.sha }} .
+
+      - name: Push Docker image
+        run: |
+          docker push $IMAGE_NAME:${{ github.sha }}
+
+  deploy-dev:
+    if: github.ref == 'refs/heads/dev'
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Connect to On-Prem Server and Deploy
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          script: |
+            docker login -u ${{ env.DOCKERHUB_USERNAME }} -p ${{ env.DOCKERHUB_PAT }}
+            docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            docker stop my-app || true && docker rm my-app || true
+            docker run -d --name my-app -p 80:3000 ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
