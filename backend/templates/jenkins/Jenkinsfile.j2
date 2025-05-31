@@ -1,0 +1,24 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone repo') {
+            steps {
+                git url: '{{ public_repo_url }}'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t {{ image_name }}:latest .'
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-IDP-X', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+    sh 'docker push {{ image_name }}:latest'
+}
+            }
+        }
+    }
+}
