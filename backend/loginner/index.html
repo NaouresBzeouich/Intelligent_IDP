@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>GitHub OAuth Popup</title>
+</head>
+<body>
+
+<button id="githubLoginBtn">Login with GitHub</button>
+
+<script>
+  const CLIENT_ID = 'Iv23lisM1NexfziQUTe3';
+  const REDIRECT_URI = 'oauth-callback.html'; // Your redirect page for popup
+  const SCOPES = 'repo user';
+  const STATE = Math.random().toString(36).substring(2);
+
+  document.getElementById('githubLoginBtn').onclick = () => {
+    // GitHub OAuth URL
+    const url = `https://github.com/apps/idp-x`;
+
+    // Open popup window
+    const width = 600, height = 700;
+    const left = (screen.width / 2) - (width / 2);
+    const top = (screen.height / 2) - (height / 2);
+    const popup = window.open(url, 'githubOAuth', `width=${width},height=${height},top=${top},left=${left}`);
+
+    // Listen for message from popup window (the callback page)
+    window.addEventListener('message', async (event) => {
+      if (event.origin !== window.location.origin) return; // security check
+      if (event.data.type === 'github_oauth' && event.data.code) {
+        const code = event.data.code;
+        const installation_id = event.data.installation_id || null;
+
+        // Call backend to exchange code + installation_id for tokens
+        try {
+          const resp = await fetch(`https://yourbackend.com/authorize?code=${code}${installation_id ? `&installation_id=${installation_id}` : ''}`);
+          const tokens = await resp.json();
+
+          if (tokens.error) {
+            alert('Error: ' + tokens.error);
+            return;
+          }
+
+          // Save tokens in cookies
+          document.cookie = `oauth_token=${tokens.oauth_token}; path=/; max-age=86400;`;
+          document.cookie = `installation_token=${tokens.installation_token}; path=/; max-age=86400;`;
+
+          alert('GitHub tokens saved!');
+        } catch (err) {
+          alert('Failed to fetch tokens: ' + err.message);
+        }
+      }
+    }, false);
+  };
+</script>
+
+</body>
+</html>

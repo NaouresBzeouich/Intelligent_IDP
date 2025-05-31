@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>OAuth Callback</title>
+</head>
+<body>
+<script>
+  // Parse URL query params
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const installation_id = params.get('installation_id'); // optional
+
+  // Send code back to opener window
+  if (window.opener && code) {
+    window.opener.postMessage({
+      type: 'github_oauth',
+      code: code,
+      installation_id: installation_id
+    }, window.location.origin);
+  }
+
+  // Close popup after sending message
+  window.close();
+</script>
+</body>
+</html>
