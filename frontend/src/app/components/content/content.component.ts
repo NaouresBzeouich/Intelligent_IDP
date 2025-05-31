@@ -8,7 +8,7 @@ import { Component, signal, WritableSignal } from '@angular/core';
 })
 export class ContentComponent {
     
-    techStacks : {name:string |undefined , dockerfile:string |undefined}[] = [
+    techStacks : {name:string, dockerfile:string}[] = [
     
         { name: 'Node.js', dockerfile: `FROM node:18\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nCMD ["node", "index.js"]` },
     
@@ -21,7 +21,7 @@ export class ContentComponent {
         { name: 'PHP', dockerfile: `FROM php:8.2-apache\nCOPY src/ /var/www/html/\nEXPOSE 80` },
   ];
 
-selectedTech : WritableSignal<{name: string |undefined , dockerfile: string |undefined}> = signal({...this.techStacks[0]});
+selectedTech : WritableSignal<{name: string  , dockerfile: string }> = signal({...this.techStacks[0]});
  
   
   onTechChange(name: string) {

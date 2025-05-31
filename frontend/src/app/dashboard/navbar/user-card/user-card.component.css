@@ -1,0 +1,112 @@
+/* Container for the user card and pop-up */
+.user-card-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* User Avatar (the circle) */
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #fff; /* Text color for initials */
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+  user-select: none; /* Prevent text selection on initials */
+}
+
+.user-avatar:hover {
+  transform: scale(1.05);
+}
+
+/* User Name */
+.user-name {
+  font-size: 18px;
+  color: #333;
+}
+
+/* Settings Card Styles */
+.settings-card {
+  position: absolute;
+  top: calc(100% + 15px); /* Position below the user card */
+  right: 0; /* Align to the right of the user card */
+  width: 250px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px); /* Slightly move down for animation */
+  transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+  z-index: 1000; /* Ensure it's above other content */
+}
+
+/* Class added by Angular to show the card */
+.settings-card.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Settings Card Header */
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.settings-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+/* Close button for settings card */
+.close-btn {
+  font-size: 24px;
+  cursor: pointer;
+  color: #888;
+  transition: color 0.2s ease;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+/* Settings List */
+.settings-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.settings-card ul li {
+  padding: 12px 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.settings-card ul li:last-child {
+  border-bottom: none; /* No border for the last item */
+}
+
+.settings-card ul li a {
+  text-decoration: none;
+  color: #555;
+  display: block; /* Make the whole list item clickable */
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.settings-card ul li a:hover {
+  background-color: #f5f5f5;
+  color: #007bff;
+}

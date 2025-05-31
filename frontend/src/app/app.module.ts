@@ -22,6 +22,8 @@ import { HighlightModule, HIGHLIGHT_OPTIONS } from 'ngx-highlightjs';
 import { HttpClientModule } from '@angular/common/module.d-CnjH8Dlt';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { ChatComponent } from './components/chat/chat.component';
+import { NavbarComponent } from './dashboard/navbar/navbar/navbar.component';
+import { UserCardComponent } from './dashboard/navbar/user-card/user-card.component';
 
 @NgModule({
   declarations: [
@@ -33,6 +35,8 @@ import { ChatComponent } from './components/chat/chat.component';
     SidebarItemComponent,
     SidebarItemsComponent,
     SidebarHeaderComponent,
+    NavbarComponent,
+    UserCardComponent,
     // pages
     HomeComponent,
 
@@ -41,7 +45,7 @@ import { ChatComponent } from './components/chat/chat.component';
      SidebarNewItemComponent,
 
   ],
-  imports: [BrowserModule, AppRoutingModule,HighlightModule,FormsModule,ChatComponent,
+  imports: [BrowserModule, AppRoutingModule,HighlightModule,FormsModule,ChatComponent
 ],
   providers: [provideHttpClient(withInterceptorsFromDi()),
      {
