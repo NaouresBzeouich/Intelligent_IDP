@@ -24,6 +24,7 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { ChatComponent } from './components/chat/chat.component';
 import { NavbarComponent } from './dashboard/navbar/navbar/navbar.component';
 import { UserCardComponent } from './dashboard/navbar/user-card/user-card.component';
+import { ThemeToggleComponent } from './theme-toggle/theme-toggle.component';
 
 @NgModule({
   declarations: [
@@ -45,7 +46,7 @@ import { UserCardComponent } from './dashboard/navbar/user-card/user-card.compon
      SidebarNewItemComponent,
 
   ],
-  imports: [BrowserModule, AppRoutingModule,HighlightModule,FormsModule,ChatComponent
+  imports: [BrowserModule, AppRoutingModule,HighlightModule,FormsModule,ChatComponent,ThemeToggleComponent
 ],
   providers: [provideHttpClient(withInterceptorsFromDi()),
      {
