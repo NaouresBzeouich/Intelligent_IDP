@@ -8,13 +8,15 @@ from jinja2 import Environment, FileSystemLoader
 load_dotenv()
 
 jenkins_url = os.getenv("JENKINS_URL")
-jenkins_api_token = os.getenv("JENKINS_PASSWORD")
+jenkins_api_token = os.getenv("JENKINS_API_TOKEN")
 jenkins_user = os.getenv("JENKINS_USER")
-job_name = os.getenv("JOB_NAME")
 dockerhub_username = os.getenv("DOCKERHUB_USERNAME")
 dockerhub_password = os.getenv("DOCKERHUB_PASSWORD")
-public_repo_url = os.getenv("PUBLIC_REPO_URL")
+dockerhub_cred_Jenkins=os.getenv("DOCKERHUB_CREDS_FROM_JENKINS")
 
+public_repo_url = "https://github.com/mohamedazizbalti/Blog-Website"
+
+job_name = "test22DDDzzz2"
 image_project_name = "test1"
 image_name = f"{dockerhub_username}/{image_project_name}"
 
@@ -27,22 +29,13 @@ env = Environment(loader=FileSystemLoader(template_dir))
 import requests
 from requests.auth import HTTPBasicAuth
 
-def get_jenkins_crumb():
-    crumb_url = f"{jenkins_url}/crumbIssuer/api/json"
-    response = requests.get(crumb_url, auth=HTTPBasicAuth(jenkins_user, jenkins_api_token))
-    if response.status_code == 200:
-        crumb_data = response.json()
-        return {crumb_data['crumbRequestField']: crumb_data['crumb']}
-    else:
-        print(f"❌ Failed to get crumb: {response.status_code}")
-        return None
-
 
 def render_pipeline_script():
     template = env.get_template('Jenkinsfile.j2')
     return template.render(
         public_repo_url=public_repo_url,
-        image_name=image_name
+        image_name=image_name,
+        dockerhub_cred_Jenkins=dockerhub_cred_Jenkins
     )
 
 pipeline_script = render_pipeline_script()
@@ -58,6 +51,16 @@ job_config = render_job_config(pipeline_script)
 
 
 # === Create job ===
+def get_jenkins_crumb():
+    crumb_url = f"{jenkins_url}/crumbIssuer/api/json"
+    response = requests.get(crumb_url, auth=HTTPBasicAuth(jenkins_user, jenkins_api_token))
+    if response.status_code == 200:
+        crumb_data = response.json()
+        return {crumb_data['crumbRequestField']: crumb_data['crumb']}
+    else:
+        print(f"❌ Failed to get crumb: {response.status_code}")
+        return None
+
 def create_jenkins_job(job_name, job_config):
     headers = get_jenkins_crumb()
 
@@ -78,26 +81,18 @@ def create_jenkins_job(job_name, job_config):
         print(f"❌ Failed to create job: {response.status_code}")
         print(response.text)
     
-    response = requests.post(
-    f"{jenkins_url}/job/{job_name}/build",
-    headers=headers,
-    auth=HTTPBasicAuth(jenkins_user, jenkins_api_token)
-)
 
 
 # === Trigger build ===
 def trigger_build(job_name):
     headers = get_jenkins_crumb()
 
-    headers = {
-        crumb_data['crumbRequestField']: crumb_data['crumb']
-    }
+    headers['Content-Type'] = 'application/xml'  # ou autre si besoin
 
-    build_url = f"{jenkins_url}/job/{job_name}/build"
     response = requests.post(
-        build_url,
-        headers=headers,
-        auth=HTTPBasicAuth(jenkins_user, jenkins_api_token)
+    f"{jenkins_url}/job/{job_name}/build",
+    headers=headers,
+    auth=HTTPBasicAuth(jenkins_user, jenkins_api_token)
     )
 
     if response.status_code == 201:

@@ -4,20 +4,33 @@ pipeline {
     stages {
         stage('Clone repo') {
             steps {
-                git url: '{{ public_repo_url }}'
+                git url: '{{ public_repo_url }}', branch: 'master'
             }
         }
+
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t {{ image_name }}:latest .'
+                script {
+                    bat 'docker build -t {{ image_name }} .'
+                }
             }
         }
+
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-IDP-X', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-    sh 'docker push {{ image_name }}:latest'
-}
+                script {
+                    withCredentials(
+                        [usernamePassword(
+                            credentialsId: '{{ dockerhub_cred_Jenkins }}' , 
+                            usernameVariable: 'DOCKERHUB_USER', 
+                            passwordVariable: 'DOCKERHUB_PASS'
+                        )]){
+                           bat """
+                            echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                            docker push {{ image_name }}:latest
+                            """
+                            }
+                        }
             }
         }
     }
