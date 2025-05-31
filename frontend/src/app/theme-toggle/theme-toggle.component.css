@@ -1,0 +1,25 @@
+.theme-toggle-button {
+  background-color: var(--button-background);
+  color: var(--button-text-color);
+  border: none;
+  border-radius: 50%; /* Make it circular */
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  font-size: 1.2em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
+  z-index: 1000; /* Ensure it's above other content */
+}
+
+.theme-toggle-button:hover {
+  transform: scale(1.1);
+}
+
+.theme-toggle-button svg {
+  width: 20px;
+  height: 20px;
+}
