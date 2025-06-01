@@ -21,11 +21,11 @@ export class ThemeService {
     if (typeof localStorage !== 'undefined') { // Check if localStorage is available (for SSR compatibility)
       const storedPreference = localStorage.getItem(this.THEME_KEY);
       if (storedPreference !== null) {
-        return storedPreference === 'dark';
+        return storedPreference === 'light';
       }
     }
     // Fallback to system preference if no stored preference
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
   }
 
   // Apply the theme immediately when the service is initialized

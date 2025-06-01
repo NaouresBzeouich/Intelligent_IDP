@@ -20,7 +20,7 @@ APP_ID = 1344769
 PRIVATE_KEY_PATH = "idp-x.2025-05-30.private-key.pem"
 
 # MongoDB Atlas configuration
-MONGO_URI = "mongodb+srv://omar:ramo@cluster0.rt44zn0.mongodb.net/"
+MONGO_URI = "mongodb+srv://omar:ramo@cluster0.rt44zn0.mongodb.net/idpx"
 DB_NAME = "idp_platform"
 
 app = Flask(__name__)
@@ -267,7 +267,7 @@ def list_projects():
         per_page = int(request.args.get('per_page', 10))
         search = request.args.get('search', '')
         
-        # Build query
+        # Build query - only show active projects
         query = {"status": "active"}
         if search:
             query["$or"] = [
@@ -318,16 +318,60 @@ def list_projects():
 @app.route('/api/projects/<project_id>', methods=['DELETE'])
 def delete_project(project_id):
     try:
+        # Get the GitHub token from the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "No authorization token provided"}), 401
+
+        token = auth_header.split(' ')[1]
+
+        # Get user info from GitHub
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/vnd.github+json'
+        }
+        user_response = requests.get('https://api.github.com/user', headers=headers)
+        if user_response.status_code != 200:
+            return jsonify({
+                "error": "Failed to verify user",
+                "details": user_response.json()
+            }), 401
+
+        user_data = user_response.json()
+        user_id = user_data['id']
+
+        # Find the project and verify ownership
+        project = db.projects.find_one({
+            "_id": ObjectId(project_id),
+            "status": "active"
+        })
+
+        if not project:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        if project['owner']['id'] != user_id:
+            return jsonify({
+                "error": "Unauthorized to delete this project"
+            }), 403
+
         # Soft delete by updating status
         result = db.projects.update_one(
             {"_id": ObjectId(project_id)},
-            {"$set": {"status": "deleted"}}
+            {
+                "$set": {
+                    "status": "deleted",
+                    "deleted_at": datetime.datetime.utcnow(),
+                    "deleted_by": user_id
+                }
+            }
         )
 
         if result.modified_count == 0:
             return jsonify({
-                "error": "Project not found"
-            }), 404
+                "error": "Failed to delete project"
+            }), 500
 
         return jsonify({
             "message": "Project deleted successfully"
@@ -364,7 +408,7 @@ def get_sidebar_projects():
         user_data = user_response.json()
         user_id = user_data['id']
 
-        # Get user's projects
+        # Get user's active projects only
         projects = list(db.projects.find(
             {
                 "status": "active",
@@ -375,7 +419,9 @@ def get_sidebar_projects():
                 "repo_full_name": 1,
                 "repo_url": 1,
                 "created_at": 1,
-                "updated_at": 1
+                "updated_at": 1,
+                "description": 1,
+                "metadata": 1
             }
         ).sort("created_at", -1))
 
@@ -385,6 +431,11 @@ def get_sidebar_projects():
             project['created_at'] = project['created_at'].isoformat()
             if 'updated_at' in project:
                 project['updated_at'] = project['updated_at'].isoformat()
+            # Extract description from metadata if not available at root level
+            if not project.get('description') and project.get('metadata', {}).get('description'):
+                project['description'] = project['metadata']['description']
+            # Remove metadata from response to keep it clean
+            project.pop('metadata', None)
 
         return jsonify({
             "projects": projects,

@@ -9,8 +9,13 @@ export interface Project {
   repo_name: string;
   repo_full_name: string;
   repo_url: string;
+  description?: string;
   created_at: string;
   updated_at: string;
+  metadata?: {
+    description?: string;
+    [key: string]: any;
+  };
 }
 
 @Injectable({
@@ -81,6 +86,22 @@ export class ProjectsService {
       await this.loadProjects();
     } catch (error) {
       console.error('[ProjectsService] Error adding project:', error);
+      throw error;
+    }
+  }
+
+  async deleteProject(projectId: string): Promise<void> {
+    try {
+      console.log('[ProjectsService] Deleting project:', projectId);
+      
+      await this.http.delete(`${this.backendUrl}/api/projects/${projectId}`, {
+        headers: this.getHeaders()
+      }).toPromise();
+
+      // Refresh the projects list after deletion
+      await this.loadProjects();
+    } catch (error) {
+      console.error('[ProjectsService] Error deleting project:', error);
       throw error;
     }
   }

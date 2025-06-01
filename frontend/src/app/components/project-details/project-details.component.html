@@ -1,0 +1,101 @@
+<div class="container mx-auto px-4 py-6">
+  <!-- Project Header -->
+  @if (project) {
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div class="flex justify-between items-start">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900 mb-2">{{ project.repo_name }}</h1>
+          <p class="text-gray-600 mb-2">{{ project.repo_full_name }}</p>
+          <p class="text-gray-700 mb-3">{{ project.description || 'No description available' }}</p>
+          <a [href]="project.repo_url" target="_blank" class="text-indigo-600 hover:text-indigo-800 text-sm">
+            View on GitHub
+          </a>
+        </div>
+        <button 
+          (click)="destroyProject()"
+          class="flex items-center px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Destroy
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Tech Stack Selector -->
+  <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h2 class="text-xl font-semibold mb-4">Select Tech Stack</h2>
+    <select 
+      [(ngModel)]="selectedTech.name" 
+      (change)="onTechChange(selectedTech.name)"
+      class="w-full p-2 border border-gray-300 rounded-md mb-4 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+    >
+      @for (tech of techStacks; track tech.name) {
+        <option [value]="tech.name">{{ tech.name }}</option>
+      }
+    </select>
+
+    <div class="bg-gray-50 rounded-lg p-4">
+      <pre><code [highlight]="selectedTech.dockerfile" [language]="'dockerfile'"></code></pre>
+    </div>
+  </div>
+
+  <!-- Chat Section -->
+  <div class="bg-white rounded-lg shadow-md p-6">
+    <h2 class="text-xl font-semibold mb-4">Chat with IDP Assistant</h2>
+    
+    <!-- Chat History -->
+    <div class="space-y-4 mb-4 max-h-[400px] overflow-y-auto">
+      @for (message of chatHistory; track message.timestamp) {
+        <div class="flex flex-col" [class.items-end]="message.type === 'user'">
+          <div 
+            class="max-w-[80%] rounded-lg p-3"
+            [class.bg-indigo-100]="message.type === 'user'"
+            [class.bg-gray-100]="message.type === 'assistant'"
+          >
+            <div class="text-xs text-gray-500 mb-1">
+              {{ message.type === 'user' ? 'You' : 'Assistant' }} • {{ message.timestamp | date:'shortTime' }}
+            </div>
+            @if (message.type === 'assistant') {
+              <markdown [data]="message.content"></markdown>
+            } @else {
+              <p class="whitespace-pre-wrap">{{ message.content }}</p>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="space-y-4">
+      <!-- Message Input -->
+      <div>
+        <textarea
+          [(ngModel)]="userInput"
+          rows="4"
+          class="w-full p-3 border border-gray-300 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          placeholder="Type your message here..."
+          [disabled]="isLoading"
+        ></textarea>
+      </div>
+
+      <!-- Send Button -->
+      <button
+        (click)="sendMessage()"
+        [disabled]="isLoading || !userInput.trim()"
+        class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+      >
+        @if (isLoading) {
+          <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Processing...
+        } @else {
+          Send Message
+        }
+      </button>
+    </div>
+  </div>
+</div> 
