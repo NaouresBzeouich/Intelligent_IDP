@@ -4,6 +4,14 @@ import { HomeComponent } from './pages/home/home.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
+  { 
+    path: 'authorize', 
+    loadComponent: () => import('./authorize/authorize.component').then(m => m.AuthorizeComponent)
+  },
+  {
+    path: 'projects/:id',
+    loadComponent: () => import('./components/project-details/project-details.component').then(m => m.ProjectDetailsComponent)
+  }
 ];
 
 @NgModule({

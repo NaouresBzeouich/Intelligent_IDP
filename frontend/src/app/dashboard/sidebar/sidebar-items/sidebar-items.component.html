@@ -1,8 +1,26 @@
-<div>
-  @for (project of projects; track $index) {
-    <div class="border-b font-Orbitron">
-      <sidebar-item [title]="project" routerLink="/">
-      </sidebar-item>
+<div class="px-4">
+  @if (!userService.isLoggedIn()) {
+    <div class="text-gray-500 text-sm text-center py-4">
+      Please log in to see your projects
+    </div>
+  } @else if (projects.length === 0) {
+    <div class="text-gray-500 text-sm text-center py-4">
+      No projects yet. Click "New Project" to add one.
+    </div>
+  } @else {
+    <div class="space-y-2">
+      @for (project of projects; track project._id) {
+        <a 
+          [routerLink]="['/projects', project._id]"
+          class="block p-3 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          <div class="font-medium text-gray-900">{{ project.repo_name }}</div>
+          <div class="text-sm text-gray-500 truncate">{{ project.repo_full_name }}</div>
+          <div class="text-xs text-gray-400 mt-1">
+            Updated {{ project.updated_at | date:'mediumDate' }}
+          </div>
+        </a>
+      }
     </div>
   }
 </div>

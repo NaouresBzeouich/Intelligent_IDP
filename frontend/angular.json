@@ -66,7 +66,10 @@
               "buildTarget": "my-app:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "allowedHosts": ["tidy-definitely-sailfish.ngrok-free.app"]
+          }
         },
         "extract-i18n": {
           "builder": "@angular-devkit/build-angular:extract-i18n",

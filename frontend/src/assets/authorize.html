@@ -1,0 +1,8 @@
+<!-- src/assets/github-callback.html -->
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const installation_id = params.get('installation_id');
+  window.opener.postMessage({ code, installation_id }, "*");
+  window.close();
+</script>

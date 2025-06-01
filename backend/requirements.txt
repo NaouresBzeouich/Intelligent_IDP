@@ -4,3 +4,6 @@ groq
 python-dotenv
 requests
 jinja2
+pymongo
+python-jwt
+colorama
