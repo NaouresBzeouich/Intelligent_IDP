@@ -1,0 +1,27 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Pull Docker image
+      docker_image:
+        name: {{ docker_image_name }}
+        source: pull
+
+    - name: Run Docker container
+      docker_container:
+        name: {{ docker_container_name }}
+        image: {{ docker_image_name }} 
+        state: started
+        ports:
+          - "80:80"   

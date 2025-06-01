@@ -1,28 +1,31 @@
 provider "azurerm" {
   features {}
+  subscription_id = "{{ subscription_id }}"
+  tenant_id = "{{ tenant_id }}"
+
 }
 
 resource "azurerm_resource_group" "rg" {
-  name     = "IDP-X-rg"
+  name     = "{{ instance_name }}-rg"
   location = "eastus"  # Similar to AWS us-east-1
 }
 
 resource "azurerm_virtual_network" "vnet" {
-  name                = "IDP-X-vnet"
+  name                = "{{ instance_name }}-vnet"
   address_space       = ["10.0.0.0/16"]
   location           = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
 
 resource "azurerm_subnet" "subnet" {
-  name                 = "IDP-X-subnet"
+  name                 = "{{ instance_name }}-subnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
 }
 
 resource "azurerm_network_security_group" "nsg" {
-  name                = "IDP-X-nsg"
+  name                = "{{ instance_name }}-nsg"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -52,14 +55,15 @@ resource "azurerm_network_security_group" "nsg" {
 }
 
 resource "azurerm_public_ip" "pip" {
-  name                = "IDP-X-pip"
+  name                = "{{ instance_name }}-pip"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Dynamic"
+  sku                 = "Basic"
 }
 
 resource "azurerm_network_interface" "nic" {
-  name                = "IDP-X-nic"
+  name                = "{{ instance_name }}-nic"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -77,7 +81,7 @@ resource "azurerm_network_interface_security_group_association" "nic_nsg" {
 }
 
 resource "azurerm_linux_virtual_machine" "vm" {
-  name                = "{{ instance_name }}"
+  name                = "{{instance_name}}"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   size                = "Standard_B1s"  # Similar to AWS t2.micro
@@ -89,7 +93,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   admin_ssh_key {
     username   = "azureuser"
-    public_key = file("{{ key_name }}.pub")  # Note: Azure requires the public key file
+    public_key = file("{{ public_key }}.pub")  # Note: Azure requires the public key file
   }
 
   os_disk {
