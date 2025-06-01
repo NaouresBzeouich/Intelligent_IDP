@@ -3,6 +3,18 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { GitHubAuthService } from './github-auth.service';
 import { GitHubRepo } from './github-repos.service';
+import { map } from 'rxjs/operators';
+
+export interface ProjectConfig {
+  stack: string;
+  envs: Record<string, string>;
+  deploymentPlan: 'aws' | 'azure' | 'on-prem';
+  onPremConfig?: {
+    ipAddress: string;
+    publicKey: string;
+    username: string;
+  };
+}
 
 export interface Project {
   _id: string;
@@ -16,6 +28,7 @@ export interface Project {
     description?: string;
     [key: string]: any;
   };
+  config?: ProjectConfig;
 }
 
 @Injectable({
@@ -30,36 +43,69 @@ export class ProjectsService {
     private http: HttpClient,
     private authService: GitHubAuthService
   ) {
-    this.loadProjects();
-  }
-
-  private getHeaders(): HttpHeaders {
-    // The JWT token is automatically included in cookies, but we still need the Accept header
-    return new HttpHeaders({
-      'Accept': 'application/json'
+    // Initial load
+    this.loadProjects().subscribe({
+      next: (projects) => {
+        console.log('[ProjectsService] Initial projects loaded:', projects);
+      },
+      error: (error) => {
+        console.error('[ProjectsService] Error loading initial projects:', error);
+      }
     });
   }
 
-  async loadProjects(): Promise<void> {
-    try {
-      if (!this.authService.isAuthenticated()) {
-        console.log('[ProjectsService] Not authenticated, skipping project load');
-        this.projectsSubject.next([]);
-        return;
-      }
+  private getHeaders(): HttpHeaders {
+    return new HttpHeaders({
+      'Content-Type': 'application/json'
+    });
+  }
 
-      console.log('[ProjectsService] Fetching projects from backend...');
-      const response = await this.http.get<{ projects: Project[] }>(
-        `${this.backendUrl}/api/projects/sidebar`,
-        { headers: this.getHeaders() }
-      ).toPromise();
+  getCurrentProjects(): Project[] {
+    return this.projectsSubject.value;
+  }
 
-      console.log('[ProjectsService] Received projects:', response?.projects);
-      this.projectsSubject.next(response?.projects || []);
-    } catch (error) {
-      console.error('[ProjectsService] Error loading projects:', error);
-      this.projectsSubject.next([]);
-    }
+  loadProjects(): Observable<Project[]> {
+    console.log('[ProjectsService] Loading projects...');
+    return this.http.get<any>(`${this.backendUrl}/api/projects/sidebar`, {
+      headers: this.getHeaders(),
+      withCredentials: true
+    }).pipe(
+      map(response => {
+        const projects = response.projects || [];
+        console.log('[ProjectsService] Projects loaded:', projects);
+        this.projectsSubject.next(projects);
+        return projects;
+      })
+    );
+  }
+
+/*   deleteProject(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.backendUrl}/api/projects/${id}`, {
+      headers: this.getHeaders()
+    }).pipe(
+      map(() => {
+        const currentProjects = this.projectsSubject.value;
+        const updatedProjects = currentProjects.filter(p => p._id !== id);
+        this.projectsSubject.next(updatedProjects);
+      })
+    );
+  } */
+
+  saveProjectConfig(projectId: string, config: ProjectConfig): Observable<Project> {
+    return this.http.post<Project>(
+      `${this.backendUrl}/api/projects/${projectId}/config`, 
+      config,
+      { headers: this.getHeaders() }
+    ).pipe(
+      map(updatedProject => {
+        const currentProjects = this.projectsSubject.value;
+        const updatedProjects = currentProjects.map(p => 
+          p._id === projectId ? { ...p, config } : p
+        );
+        this.projectsSubject.next(updatedProjects);
+        return updatedProject;
+      })
+    );
   }
 
   async addProject(repo: GitHubRepo): Promise<void> {
@@ -105,11 +151,7 @@ export class ProjectsService {
     }
   }
 
-  getCurrentProjects(): Project[] {
-    return this.projectsSubject.value;
-  }
-
-  refreshProjects(): Promise<void> {
-    return this.loadProjects();
+  async refreshProjects(): Promise<Project[]> {
+    return await this.loadProjects().toPromise() ??[];
   }
 } 

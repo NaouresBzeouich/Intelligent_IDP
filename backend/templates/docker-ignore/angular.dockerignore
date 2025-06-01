@@ -1,0 +1,43 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+/e2e/*.js
+/e2e/*.map
+
+# Production
+/dist
+/tmp
+/out-tsc
+
+# Environment
+/src/environments/*.js
+/src/environments/*.js.map
+
+# IDEs and editors
+/.idea
+/.vscode
+/.history
+*.sublime-workspace
+*.sublime-project
+
+# Misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Version control
+.git
+.gitignore 

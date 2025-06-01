@@ -1,0 +1,41 @@
+# Dependencies
+/vendor
+composer.phar
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Testing
+/phpunit.xml
+.phpunit.result.cache
+/coverage
+
+# Application
+/storage/*.key
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE
+/.idea
+/.vscode
+/_ide_helper.php
+/.phpstorm.meta.php
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+*.cache
+*.swp
+*.swo 

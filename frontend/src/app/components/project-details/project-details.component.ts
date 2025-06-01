@@ -2,31 +2,18 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { ProjectsService, Project } from '../../services/projects.service';
+import { ProjectsService, Project, ProjectConfig } from '../../services/projects.service';
 import { StacksService, Stack } from '../../services/stacks.service';
 import { Subscription, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { HighlightModule, HIGHLIGHT_OPTIONS } from 'ngx-highlightjs';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { MarkdownModule, MarkdownService } from 'ngx-markdown';
 
 interface ChatMessage {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-}
-
-type DeploymentPlan = 'azure' | 'aws' | 'on-prem';
-
-interface DeploymentConfig {
-  stack: string;
-  envs: Record<string, string>;
-  deploymentPlan: DeploymentPlan;
-  onPremConfig?: {
-    ipAddress: string;
-    publicKey: string;
-    username: string;
-  };
 }
 
 @Component({
@@ -47,8 +34,11 @@ interface DeploymentConfig {
       useValue: {
         coreLibraryLoader: () => import('highlight.js/lib/core'),
         languages: {
-          dockerfile: () => import('highlight.js/lib/languages/dockerfile')
-        }
+          dockerfile: () => import('highlight.js/lib/languages/dockerfile'),
+          yaml: () => import('highlight.js/lib/languages/yaml'),
+          bash: () => import('highlight.js/lib/languages/bash')
+        },
+        themePath: 'assets/highlight.js/styles/github.css'
       }
     }
   ]
@@ -60,19 +50,23 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
   private projectId: string | null = null;
   private subscriptions: Subscription[] = [];
   isLoading: boolean = false;
+  isDockerfileVisible: boolean = true;
+
+  // Dictionary to store configurations per project
+  private projectConfigs: Record<string, ProjectConfig> = {};
 
   techStacks: Stack[] = [];
   selectedTech: Stack;
   envVars: Record<string, string> = {};
   private envVarsUpdate = new Subject<Record<string, string>>();
 
-  // New properties for deployment configuration
-  deploymentConfig: DeploymentConfig = {
+  deploymentConfig: ProjectConfig = {
     stack: '',
     envs: {},
     deploymentPlan: 'aws'
   };
-  deploymentPlans: { value: DeploymentPlan; label: string }[] = [
+
+  deploymentPlans: { value: 'aws' | 'azure' | 'on-prem'; label: string }[] = [
     { value: 'aws', label: 'AWS' },
     { value: 'azure', label: 'Azure' },
     { value: 'on-prem', label: 'On-Premises' }
@@ -103,8 +97,9 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       this.stacksService.getStacks().subscribe({
         next: (stacks) => {
           this.techStacks = stacks;
-          if (stacks.length > 0) {
+          if (stacks.length > 0 && !this.deploymentConfig.stack) {
             this.selectedTech = { ...stacks[0] };
+            this.deploymentConfig.stack = stacks[0].name;
           }
         },
         error: (error) => {
@@ -113,40 +108,55 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       })
     );
 
+    
     // Subscribe to environment variables updates with debounce
     this.subscriptions.push(
       this.envVarsUpdate.pipe(
         debounceTime(100)  // 100ms debounce
       ).subscribe(envVars => {
+        this.deploymentConfig.envs = envVars;
         if (this.selectedTech.file_path.endsWith('.j2')) {
           this.renderTemplate();
         }
       })
     );
-
-    // Initialize deployment config with first stack
-    if (this.techStacks.length > 0) {
-      this.deploymentConfig.stack = this.techStacks[0].name;
-    }
   }
 
-  ngOnDestroy() {
-    this.subscriptions.forEach(sub => sub.unsubscribe());
-  }
-
-  private async loadProjectDetails() {
+  private loadProjectDetails() {
     if (!this.projectId) return;
     
-    // Get project from current projects
-    const projects = this.projectsService.getCurrentProjects();
-    const foundProject = projects.find(p => p._id === this.projectId) || null;
-    
-    // Extract description from metadata if not available at root level
-    if (foundProject && !foundProject.description && foundProject.metadata?.description) {
-      foundProject.description = foundProject.metadata.description;
-    }
-    
-    this.project = foundProject;
+    // Subscribe to projects updates
+    this.subscriptions.push(
+      this.projectsService.projects$.subscribe(projects => {
+        const foundProject = projects.find(p => p._id === this.projectId) || null;
+        
+        if (foundProject) {
+          this.project = foundProject;
+          
+          // Load existing configuration if available
+          if (this.projectId) {
+            // Check if we have a cached config
+            if (this.projectConfigs[this.projectId]) {
+              this.deploymentConfig = { ...this.projectConfigs[this.projectId] };
+              this.envVars = { ...this.projectConfigs[this.projectId].envs };
+            } else if (foundProject.config) {
+              // If no cached config, use the one from the project
+              this.deploymentConfig = { ...foundProject.config };
+              this.envVars = { ...foundProject.config.envs };
+              // Cache the config
+              this.projectConfigs[this.projectId] = { ...foundProject.config };
+            }
+
+            // Find and select the tech stack
+            const foundStack = this.techStacks.find(t => t.name === this.deploymentConfig.stack);
+            if (foundStack) {
+              this.selectedTech = { ...foundStack };
+              this.onTechChange(foundStack.name);
+            }
+          }
+        }
+      })
+    );
   }
 
   onTechChange(name: string) {
@@ -154,7 +164,11 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
     this.selectedTech = { ...found };
     this.deploymentConfig.stack = name;
     
-    // If it's a Jinja2 template, render it
+    if (this.projectId) {
+      // Update the cached config
+      this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
+    }
+    
     if (this.selectedTech.file_path.endsWith('.j2')) {
       this.renderTemplate();
     }
@@ -176,6 +190,12 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
   updateEnvVars(envVars: Record<string, string>) {
     this.envVars = envVars;
     this.deploymentConfig.envs = envVars;
+    
+    if (this.projectId) {
+      // Update the cached config
+      this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
+    }
+    
     this.envVarsUpdate.next(envVars);
     this.validateDeployment();
   }
@@ -202,7 +222,7 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  onDeploymentPlanChange(plan: DeploymentPlan) {
+  onDeploymentPlanChange(plan: 'aws' | 'azure' | 'on-prem') {
     this.deploymentConfig.deploymentPlan = plan;
     if (plan !== 'on-prem') {
       delete this.deploymentConfig.onPremConfig;
@@ -210,15 +230,27 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       this.deploymentConfig.onPremConfig = {
         ipAddress: '',
         publicKey: '',
-        username: 'root'  // Default username
+        username: 'root'
       };
     }
+    
+    if (this.projectId) {
+      // Update the cached config
+      this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
+    }
+    
     this.validateDeployment();
   }
 
   updateOnPremConfig(field: 'ipAddress' | 'publicKey' | 'username', value: string) {
     if (this.deploymentConfig.deploymentPlan === 'on-prem' && this.deploymentConfig.onPremConfig) {
       this.deploymentConfig.onPremConfig[field] = value;
+      
+      if (this.projectId) {
+        // Update the cached config
+        this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
+      }
+      
       this.validateDeployment();
     }
   }
@@ -254,20 +286,36 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
   }
 
   async deployConfiguration() {
-    if (!this.isDeploymentValid || !this.project) return;
+    if (!this.isDeploymentValid || !this.project?._id) return;
 
     try {
-      const response = await this.http.post('http://localhost:5000/api/deploy', {
-        projectId: this.project._id,
-        config: this.deploymentConfig
-      }).toPromise();
+      const updatedProject = await this.projectsService
+        .saveProjectConfig(this.project._id, this.deploymentConfig)
+        .toPromise();
 
-      // Handle successful deployment
-      console.log('Deployment configuration sent successfully:', response);
-      // You might want to show a success message or redirect
+      console.log('Configuration saved successfully:', updatedProject);
+      
+      // Update the cached config after successful save
+      if (this.projectId) {
+        this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
+      }
     } catch (error) {
-      console.error('Error deploying configuration:', error);
-      // Handle error (show error message, etc.)
+      console.error('Error saving configuration:', error);
+    }
+  }
+
+  async destroyProject() {
+    if (!this.project || !confirm('Are you sure you want to destroy this project? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await this.projectsService.deleteProject(this.project._id);
+      // Navigate back to home page after successful deletion
+      this.router.navigate(['/']);
+    } catch (error) {
+      console.error('Error destroying project:', error);
+      alert('Failed to destroy project. Please try again.');
     }
   }
 
@@ -282,13 +330,14 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
     this.chatHistory.push(userMessage);
 
     this.isLoading = true;
-    const params = new HttpParams()
-      .set('message', this.userInput)
-      .set('project_id', this.project._id)
-      .set('repo_name', this.project.repo_name)
-      .set('repo_full_name', this.project.repo_full_name);
-
     try {
+      const params = {
+        message: this.userInput,
+        project_id: this.project._id,
+        repo_name: this.project.repo_name,
+        repo_full_name: this.project.repo_full_name
+      };
+
       const result = await this.http.get<{response: string}>('http://localhost:5000/chat', { params }).toPromise();
       
       const assistantMessage: ChatMessage = {
@@ -312,18 +361,11 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  async destroyProject() {
-    if (!this.project || !confirm('Are you sure you want to destroy this project? This action cannot be undone.')) {
-      return;
-    }
+  toggleDockerfile() {
+    this.isDockerfileVisible = !this.isDockerfileVisible;
+  }
 
-    try {
-      await this.projectsService.deleteProject(this.project._id);
-      // Navigate back to home page after successful deletion
-      this.router.navigate(['/']);
-    } catch (error) {
-      console.error('Error destroying project:', error);
-      alert('Failed to destroy project. Please try again.');
-    }
+  ngOnDestroy() {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 } 

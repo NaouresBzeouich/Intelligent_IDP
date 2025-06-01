@@ -27,6 +27,7 @@
   <!-- Tech Stack Selector -->
   <div class="bg-white rounded-lg shadow-md p-6 mb-6">
     <h2 class="text-xl font-semibold mb-4">Select Tech Stack</h2>
+    
     <select 
       [(ngModel)]="selectedTech.name" 
       (change)="onTechChange(selectedTech.name)"
@@ -76,10 +77,91 @@
       </div>
     }
 
-    <div class="bg-gray-50 rounded-lg p-4">
-      <pre><code [highlight]="selectedTech.content" [language]="'dockerfile'"></code></pre>
-    </div>
-  </div>
+    <!-- Configuration Summary -->
+    <!-- <div class="bg-gray-50 rounded-lg p-4 mb-4">
+      <h3 class="text-lg font-medium mb-3">Configuration Summary</h3>
+      <dl class="space-y-4">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Selected Stack</dt>
+          <dd class="text-sm text-gray-900">{{ deploymentConfig.stack }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Deployment Plan</dt>
+          <dd class="flex items-center gap-2 mt-1">
+            @switch (deploymentConfig.deploymentPlan) {
+              @case ('aws') {
+                <img 
+                  src="assets/images/aws.png" 
+                  alt="AWS Logo" 
+                  class="w-8 h-8 object-contain"
+                >
+                <span class="text-sm text-gray-900">Amazon Web Services</span>
+              }
+              @case ('azure') {
+                <img 
+                  src="assets/images/Microsoft_Azure.png" 
+                  alt="Microsoft Azure Logo" 
+                  class="w-8 h-8 object-contain"
+                >
+                <span class="text-sm text-gray-900">Microsoft Azure</span>
+              }
+              @case ('on-prem') {
+                <img 
+                  src="assets/images/onprem.png" 
+                  alt="On-Premises Server" 
+                  class="w-8 h-8 object-contain"
+                >
+                <span class="text-sm text-gray-900">On-Premises Server</span>
+              }
+            }
+          </dd>
+        </div>
+        @if (deploymentConfig.deploymentPlan === 'on-prem') {
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Server Configuration</dt>
+            <dd class="mt-1 space-y-2">
+              <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <span class="text-sm text-gray-900">{{ deploymentConfig.onPremConfig?.username }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                </svg>
+                <span class="text-sm text-gray-900">{{ deploymentConfig.onPremConfig?.ipAddress }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                </svg>
+                <span class="text-sm text-gray-900 font-mono">{{ (deploymentConfig.onPremConfig?.publicKey || '').substring(0, 30) }}...</span>
+              </div>
+            </dd>
+          </div>
+        }
+        <div>
+          <dt class="text-sm font-medium text-gray-500 mb-2">Environment Variables</dt>
+          <dd class="text-sm text-gray-900 bg-white rounded-md p-3 border border-gray-200">
+            <ul class="space-y-1">
+              @for (env of deploymentConfig.envs | keyvalue; track env.key) {
+                <li class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                  </svg>
+                  <span class="font-medium">{{ env.key }}:</span>
+                  <span class="text-gray-600">{{ env.value }}</span>
+                </li>
+              }
+            </ul>
+          </dd>
+        </div>
+      </dl>
+    </div> -->
+
+    <!-- Docker Toggle Button -->
+
 
   <!-- Deployment Configuration Section -->
   <div class="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -218,6 +300,33 @@
       </dl>
     </div>
 
+        <button 
+      (click)="toggleDockerfile()"
+      class="w-full flex items-center justify-center gap-3 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors border border-blue-200"
+    >
+      <img 
+        src="assets/images/docker.png" 
+        alt="Docker Logo" 
+        class="w-6 h-6 object-contain"
+      >
+      <span class="font-medium">{{ isDockerfileVisible ? 'Hide' : 'Show' }} Dockerfile</span>
+    </button>
+
+    <!-- Dockerfile Preview -->
+    @if (isDockerfileVisible) {
+      <div class="bg-gray-900 rounded-lg p-4 mt-4 text-white">
+        <div class="flex items-center gap-2 mb-3 text-gray-300 border-b border-gray-700 pb-2">
+          <img 
+            src="assets/images/docker.png" 
+            alt="Docker Logo" 
+            class="w-5 h-5 object-contain"
+          >
+          <span>Dockerfile</span>
+        </div>
+        <pre class="text-sm"><code [highlight]="selectedTech.content" [language]="'dockerfile'" class="language-dockerfile"></code></pre>
+      </div>
+    }
+  </div>
     <!-- Deploy Button -->
     <button
       (click)="deployConfiguration()"

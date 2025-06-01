@@ -3,6 +3,10 @@
     <div class="text-gray-500 text-sm text-center py-4">
       Please log in to see your projects
     </div>
+  } @else if (isLoading) {
+    <div class="text-gray-500 text-sm text-center py-4">
+      Loading projects...
+    </div>
   } @else if (projects.length === 0) {
     <div class="text-gray-500 text-sm text-center py-4">
       No projects yet. Click "New Project" to add one.
@@ -14,9 +18,9 @@
           [routerLink]="['/projects', project._id]"
           class="block p-3 rounded-lg hover:bg-gray-200 transition-colors"
         >
-          <div class="font-medium text-gray-900">{{ project.repo_name }}</div>
-          <div class="text-sm text-gray-500 truncate">{{ project.repo_full_name }}</div>
-          <div class="text-xs text-gray-400 mt-1">
+          <div class="font-medium text-gray-900 font-Orbitron">{{ project.repo_name }}</div>
+          <div class="text-sm text-gray-500 truncate font-Orbitron">{{ project.repo_full_name }}</div>
+          <div class="text-xs text-gray-400 mt-1 font-Orbitron">
             Updated {{ project.updated_at | date:'mediumDate' }}
           </div>
         </a>

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+bower_components/
+
+# Build output
+dist/
+build/
+*.min.*
+
+# Environment
+.env
+.env.*
+
+# Version control
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Other
+.sass-cache/
+.tmp/
+_site/ 

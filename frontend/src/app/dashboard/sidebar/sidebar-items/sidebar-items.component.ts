@@ -15,6 +15,7 @@ import { Subscription } from 'rxjs';
 export class SidebarItemsComponent implements OnInit, OnDestroy {
   projects: Project[] = [];
   private subscriptions: Subscription[] = [];
+  isLoading = false;
 
   constructor(
     public projectsService: ProjectsService,
@@ -30,6 +31,8 @@ export class SidebarItemsComponent implements OnInit, OnDestroy {
         console.log('[SidebarItems] User state changed:', state);
         if (state.isLoggedIn) {
           this.loadProjects();
+        } else {
+          this.projects = [];
         }
       })
     );
@@ -39,6 +42,7 @@ export class SidebarItemsComponent implements OnInit, OnDestroy {
       this.projectsService.projects$.subscribe(projects => {
         console.log('[SidebarItems] Projects updated:', projects);
         this.projects = projects;
+        this.isLoading = false;
       })
     );
 
@@ -55,10 +59,12 @@ export class SidebarItemsComponent implements OnInit, OnDestroy {
 
   private async loadProjects() {
     console.log('[SidebarItems] Loading projects...');
+    this.isLoading = true;
     try {
-      await this.projectsService.loadProjects();
+      await this.projectsService.loadProjects().toPromise();
     } catch (error) {
       console.error('[SidebarItems] Error loading projects:', error);
+      this.isLoading = false;
     }
   }
 }
