@@ -1,17 +1,33 @@
 <div class="user-card-container">
-  <div class="user-avatar" [style.backgroundColor]="avatarColor" (click)="toggleSettings()">
-    <span>{{ userInitials }}</span>
-  </div>
-
-  <div class="settings-card" [class.active]="showSettings">
-    <div class="settings-header ">
-      <h3>Profile name</h3>
-      <span class="close-btn " (click)="toggleSettings()">&times;</span>
+  <!-- Show avatar if user is logged in -->
+  <ng-container *ngIf="userService.getCurrentUser() as user">
+    <div class="user-avatar" (click)="toggleSettings()">
+      <!-- Use GitHub avatar if available -->
+      <img *ngIf="user.avatar_url" [src]="user.avatar_url" [alt]="user.name || user.login" class="w-full h-full rounded-full">
+      <!-- Fallback to initials if no avatar -->
+      <span *ngIf="!user.avatar_url">{{ getInitials(user.name || user.login) }}</span>
     </div>
-    <ul>
-      <li><a href="#">View your github account</a></li>
-      <li><a href="#"> theme <app-theme-toggle/> </a></li>
-      <li><a href="#">Sign Out</a></li>
-    </ul>
-  </div>
+
+    <div class="settings-card" [class.active]="showSettings">
+      <div class="settings-header">
+        <h3>{{ user.name || user.login }}</h3>
+        <span class="close-btn" (click)="toggleSettings()">&times;</span>
+      </div>
+      <ul>
+        <li>
+          <a [href]="'https://github.com/' + user.login" target="_blank">
+            View GitHub Profile
+          </a>
+        </li>
+        <li>
+          <a href="#"> 
+            Theme <app-theme-toggle/>
+          </a>
+        </li>
+        <li>
+          <a href="javascript:void(0)" (click)="logout()">Sign Out</a>
+        </li>
+      </ul>
+    </div>
+  </ng-container>
 </div>

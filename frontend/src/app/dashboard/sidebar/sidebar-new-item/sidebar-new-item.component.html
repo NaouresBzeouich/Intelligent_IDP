@@ -1,10 +1,23 @@
-<div class="w-full"> <button
+<div class="w-full">
+  <button
     class="block border border-gray-300 hover:border-[#530490] text-black font-Orbitron px-7 py-2 rounded focus:outline-none focus:shadow-outline mx-auto"
     (click)="onCreateNewChat()"
+    [disabled]="isCreatingProject"
   >
     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
     </svg>
-    New
+    New Project
   </button>
+
+  @if (error) {
+    <div class="text-red-500 text-sm mt-2 text-center">{{ error }}</div>
+  }
+
+  @if (showRepoSelector) {
+    <app-repo-selector
+      (close)="onRepoSelectorClose()"
+      (repoSelected)="onRepoSelected($event)"
+    />
+  }
 </div>

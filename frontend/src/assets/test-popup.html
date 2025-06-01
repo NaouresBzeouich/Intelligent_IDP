@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Popup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .button-group {
+            margin: 20px 0;
+        }
+        #messageLog {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            min-height: 150px;
+            background: #f9f9f9;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Popup Page</h1>
+    
+    <div class="button-group">
+        <button onclick="sendTestMessage()">Send Test Message</button>
+        <button onclick="sendGitHubMessage()">Send GitHub-like Message</button>
+        <button onclick="window.close()">Close Window</button>
+    </div>
+
+    <div id="messageLog">
+        <h3>Message Log:</h3>
+    </div>
+
+    <script>
+        function logMessage(message) {
+            const logDiv = document.getElementById('messageLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+            logDiv.appendChild(entry);
+        }
+
+        function sendTestMessage() {
+            if (!window.opener) {
+                logMessage('No opener window found!');
+                return;
+            }
+
+            const message = {
+                type: 'test',
+                data: 'Hello from popup!',
+                timestamp: new Date().toISOString()
+            };
+
+            window.opener.postMessage(message, "*");
+            logMessage(`Sent message: ${JSON.stringify(message)}`);
+        }
+
+        function sendGitHubMessage() {
+            if (!window.opener) {
+                logMessage('No opener window found!');
+                return;
+            }
+
+            const message = {
+                type: 'github_oauth',
+                code: 'test_' + Math.random().toString(36).substring(7),
+                installation_id: 'inst_' + Math.random().toString(36).substring(7)
+            };
+
+            window.opener.postMessage(message, "*");
+            logMessage(`Sent GitHub-like message: ${JSON.stringify(message)}`);
+        }
+
+        // Log when window is ready
+        logMessage('Popup window loaded');
+        
+        // Log if opener is available
+        if (window.opener) {
+            logMessage('Opener window detected');
+        } else {
+            logMessage('No opener window found');
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,8 @@
+<button 
+  class="bg-indigo-600 rounded-md w-[100px] text-white shadow-md"
+  [class.opacity-50]="user.isLoggedIn()"
+  [class.cursor-not-allowed]="user.isLoggedIn()"
+  [disabled]="user.isLoggedIn()"
+  (click)="login()">
+  Login with GitHub
+</button>

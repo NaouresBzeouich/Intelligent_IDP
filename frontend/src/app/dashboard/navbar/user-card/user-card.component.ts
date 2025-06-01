@@ -1,5 +1,6 @@
 import { Component, OnInit, Input, HostListener, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common'; // Import CommonModule for ngClass
+import { UserService } from 'src/app/services/user.service';
 
 @Component({
   selector: 'app-user-card',
@@ -8,23 +9,17 @@ import { CommonModule } from '@angular/common'; // Import CommonModule for ngCla
   standalone: false
 })
 export class UserCardComponent implements OnInit {
-  userName: string = "naoures";
-  userInitials: string = '';
-  avatarColor: string = '';
   showSettings: boolean = false;
 
-  constructor(private elementRef: ElementRef) { }
+  constructor(
+    private elementRef: ElementRef,
+    public userService: UserService
+  ) { }
 
-  ngOnInit(): void {
-    this.setAvatarDetails();
-  }
+  ngOnInit(): void {}
 
-  private setAvatarDetails(): void {
-    this.userInitials = this.getInitials(this.userName);
-    this.avatarColor = this.getRandomColor();
-  }
-
-  private getInitials(name: string): string {
+  getInitials(name: string | null): string {
+    if (!name) return '';
     const parts = name.split(' ');
     let initials = '';
     if (parts.length > 0) {
@@ -34,12 +29,6 @@ export class UserCardComponent implements OnInit {
       }
     }
     return initials.toUpperCase();
-  }
-
-  private getRandomColor(): string {
-    // Generate a random HSL color for good contrast
-    const hue = Math.floor(Math.random() * 360);
-    return `hsl(${hue}, 70%, 50%)`;
   }
 
   toggleSettings(): void {
@@ -52,5 +41,10 @@ export class UserCardComponent implements OnInit {
     if (!this.elementRef.nativeElement.contains(event.target) && this.showSettings) {
       this.showSettings = false;
     }
+  }
+
+  logout(): void {
+    this.userService.logout();
+    this.showSettings = false;
   }
 }

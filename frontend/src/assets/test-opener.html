@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Opener</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #messageLog {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            min-height: 200px;
+            background: #f9f9f9;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Opener Page</h1>
+    <button onclick="openPopup()">Open Popup</button>
+    <div id="messageLog">
+        <h3>Message Log:</h3>
+    </div>
+
+    <script>
+        let popup = null;
+
+        function openPopup() {
+            // Close existing popup if any
+            if (popup && !popup.closed) {
+                popup.close();
+            }
+
+            // Open new popup
+            popup = window.open('test-popup.html', 'TestPopup', 'width=600,height=400');
+            logMessage('Popup opened');
+        }
+
+        function logMessage(message) {
+            const logDiv = document.getElementById('messageLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+            logDiv.appendChild(entry);
+        }
+
+        // Listen for messages
+        window.addEventListener('message', function(event) {
+            logMessage(`Ignored message from unexpected origin: `);
+            // logMessage(JSON.stringify(event.data));
+
+            logMessage(`Received message: ${JSON.stringify(event.data)}`);
+        });
+
+        // Log when popup is closed
+        setInterval(() => {
+            if (popup && popup.closed) {
+                logMessage('Popup was closed');
+                popup = null;
+            }
+        }, 1000);
+    </script>
+</body>
+</html> 

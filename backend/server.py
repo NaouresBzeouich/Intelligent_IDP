@@ -6,15 +6,52 @@ import datetime
 import time
 import requests
 import jwt
-import time
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from bson import ObjectId
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 CLIENT_ID = "Iv23lisM1NexfziQUTe3"
 CLIENT_SECRET = "7e1ebbb519925432abd377720b7a1c456edbb37a"
-APP_ID = 1344769 # integer as string or int
+APP_ID = 1344769
 PRIVATE_KEY_PATH = "idp-x.2025-05-30.private-key.pem"
 
+# MongoDB Atlas configuration
+MONGO_URI = "mongodb+srv://omar:ramo@cluster0.rt44zn0.mongodb.net/"
+DB_NAME = "idp_platform"
+
 app = Flask(__name__)
-CORS(app)
+# Configure CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://localhost:4200",
+            "https://tidy-definitely-sailfish.ngrok-free.app"
+        ],
+        "methods": ["GET", "POST", "OPTIONS", "DELETE"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+
+# Initialize MongoDB client with connection pooling and timeout settings
+try:
+    mongo_client = MongoClient(
+        MONGO_URI,
+        serverSelectionTimeoutMS=5000,  # 5 second timeout
+        connectTimeoutMS=10000,  # 10 second timeout
+        maxPoolSize=50,  # Maximum number of connections
+        retryWrites=True  # Enable retryable writes
+    )
+    # Verify connection
+    mongo_client.admin.command('ping')
+    print("Successfully connected to MongoDB Atlas")
+    db = mongo_client[DB_NAME]
+except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+    print(f"Failed to connect to MongoDB Atlas: {str(e)}")
+    raise
 
 client = Groq(api_key=("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"))
 
@@ -22,11 +59,10 @@ def create_jwt(app_id, private_key_pem):
     now = int(time.time())
     payload = {
         "iat": now,
-        "exp": now + (580),  # 10 minutes max
+        "exp": now + (580),
         "iss": app_id
     }
-    return jwt.JWT().encode(payload, jwt.jwk_from_pem(private_key_pem)  , alg="RS256")
-
+    return jwt.JWT().encode(payload, jwt.jwk_from_pem(private_key_pem), alg="RS256")
 
 @app.route('/authorize', methods=['GET'])
 def authorize():
@@ -77,9 +113,6 @@ def authorize():
         "installation_token": installation_token
     })
 
-
-
-
 @app.before_request
 def log_request_info():
     arrival_time = datetime.datetime.utcnow().isoformat() + "Z"
@@ -97,7 +130,6 @@ def github_webhook():
     print("Received webhook payload:")
     print(payload)
     return jsonify({"status": "received"}), 200
-
 
 @app.route('/chat', methods=['GET'])
 def chat():
@@ -128,6 +160,242 @@ def chat():
         return jsonify({"response": reply})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/projects', methods=['POST'])
+def create_project():
+    data = request.json
+    required_fields = ['repo_name', 'repo_full_name', 'repo_url', 'default_branch', 'installation_token', 'oauth_token']
+    
+    # Validate request data
+    if not all(field in data for field in required_fields):
+        return jsonify({
+            "error": "Missing required fields",
+            "required": required_fields
+        }), 400
+
+    try:
+        # Check if project already exists
+        existing_project = db.projects.find_one({
+            "repo_full_name": data['repo_full_name'],
+            "status": "active"
+        })
+
+        if existing_project:
+            return jsonify({
+                "error": "Project already exists",
+                "project_id": str(existing_project['_id']),
+                "repo_name": existing_project['repo_name']
+            }), 409  # HTTP 409 Conflict
+
+        # Verify repository access using installation token
+        headers = {
+            'Authorization': f'Bearer {data["oauth_token"]}',
+            'Accept': 'application/vnd.github+json'
+        }
+        repo_check = requests.get(
+            f'https://api.github.com/repos/{data["repo_full_name"]}',
+            headers=headers
+        )
+
+        # if repo_check.status_code != 200:
+        #     return jsonify({
+        #         "error": "Failed to verify repository access",
+        #         "details": repo_check.json()
+        #     }), 400
+
+        # Get user info for project ownership
+        user_headers = {
+            'Authorization': f'Bearer {data["oauth_token"]}',
+            'Accept': 'application/vnd.github+json'
+        }
+        user_response = requests.get('https://api.github.com/user', headers=user_headers)
+        if user_response.status_code != 200:
+            return jsonify({
+                "error": "Failed to get user information",
+                "details": user_response.json()
+            }), 400
+
+        user_data = user_response.json()
+
+        # Prepare project document with additional fields
+        project = {
+            'repo_name': data['repo_name'],
+            'repo_full_name': data['repo_full_name'],
+            'repo_url': data['repo_url'],
+            'default_branch': data['default_branch'],
+            'created_at': datetime.datetime.utcnow(),
+            'updated_at': datetime.datetime.utcnow(),
+            'status': 'active',
+            'metadata': repo_check.json(),
+            'settings': {
+                'notifications': True,
+                'auto_sync': True,
+                'branch_protection': False
+            },
+            'owner': {
+                'id': user_data['id'],
+                'login': user_data['login'],
+                'avatar_url': user_data['avatar_url']
+            }
+        }
+
+        # Insert into MongoDB with write concern for durability
+        result = db.projects.insert_one(project)
+
+        return jsonify({
+            "message": "Project created successfully",
+            "project_id": str(result.inserted_id),
+            "repo_name": data['repo_name']
+        }), 201
+
+    except requests.RequestException as e:
+        return jsonify({
+            "error": "GitHub API error",
+            "details": str(e)
+        }), 500
+    except Exception as e:
+        return jsonify({
+            "error": "Unexpected error",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/projects', methods=['GET'])
+def list_projects():
+    try:
+        # Support pagination and filtering
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 10))
+        search = request.args.get('search', '')
+        
+        # Build query
+        query = {"status": "active"}
+        if search:
+            query["$or"] = [
+                {"repo_name": {"$regex": search, "$options": "i"}},
+                {"repo_full_name": {"$regex": search, "$options": "i"}}
+            ]
+
+        # Get total count for pagination
+        total = db.projects.count_documents(query)
+        
+        # Get paginated projects
+        projects = list(db.projects.find(
+            query,
+            {
+                "repo_name": 1,
+                "repo_full_name": 1,
+                "repo_url": 1,
+                "created_at": 1,
+                "updated_at": 1,
+                "default_branch": 1,
+                "settings": 1
+            }
+        ).sort("created_at", -1)
+         .skip((page - 1) * per_page)
+         .limit(per_page))
+
+        # Convert ObjectId and dates to string for JSON serialization
+        for project in projects:
+            project['_id'] = str(project['_id'])
+            project['created_at'] = project['created_at'].isoformat()
+            if 'updated_at' in project:
+                project['updated_at'] = project['updated_at'].isoformat()
+
+        return jsonify({
+            "projects": projects,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": (total + per_page - 1) // per_page
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to fetch projects",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/projects/<project_id>', methods=['DELETE'])
+def delete_project(project_id):
+    try:
+        # Soft delete by updating status
+        result = db.projects.update_one(
+            {"_id": ObjectId(project_id)},
+            {"$set": {"status": "deleted"}}
+        )
+
+        if result.modified_count == 0:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        return jsonify({
+            "message": "Project deleted successfully"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to delete project",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/projects/sidebar', methods=['GET'])
+def get_sidebar_projects():
+    try:
+        # Get the GitHub token from the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "No authorization token provided"}), 401
+
+        token = auth_header.split(' ')[1]
+
+        # Get user info from GitHub
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/vnd.github+json'
+        }
+        user_response = requests.get('https://api.github.com/user', headers=headers)
+        if user_response.status_code != 200:
+            return jsonify({
+                "error": "Failed to verify user",
+                "details": user_response.json()
+            }), 401
+
+        user_data = user_response.json()
+        user_id = user_data['id']
+
+        # Get user's projects
+        projects = list(db.projects.find(
+            {
+                "status": "active",
+                "owner.id": user_id
+            },
+            {
+                "repo_name": 1,
+                "repo_full_name": 1,
+                "repo_url": 1,
+                "created_at": 1,
+                "updated_at": 1
+            }
+        ).sort("created_at", -1))
+
+        # Convert ObjectId and dates to string for JSON serialization
+        for project in projects:
+            project['_id'] = str(project['_id'])
+            project['created_at'] = project['created_at'].isoformat()
+            if 'updated_at' in project:
+                project['updated_at'] = project['updated_at'].isoformat()
+
+        return jsonify({
+            "projects": projects,
+            "total": len(projects)
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to fetch projects",
+            "details": str(e)
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
