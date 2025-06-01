@@ -39,16 +39,18 @@ import { StacksService } from './services/stacks.service';
     SidebarComponent,
     SidebarItemComponent,
     SidebarHeaderComponent,
-    NavbarComponent,
-    UserCardComponent,
     
     // pages
-    HomeComponent,
 
     // others
     ContentComponent,
   ],
   imports: [
+    NavbarComponent,
+    UserCardComponent,
+
+    HomeComponent,
+
     SidebarItemsComponent,
 
     SidebarNewItemComponent,
