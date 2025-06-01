@@ -25,10 +25,10 @@ pipeline {
                             usernameVariable: 'DOCKERHUB_USER', 
                             passwordVariable: 'DOCKERHUB_PASS'
                         )]){
-                           bat """
+                           bat '''
                             echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
                             docker push {{ image_name }}:latest
-                            """
+                            '''
                             }
                         }
             }
