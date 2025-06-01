@@ -1,49 +1,34 @@
-import { Component, OnInit, Input, HostListener, ElementRef } from '@angular/core';
-import { CommonModule } from '@angular/common'; // Import CommonModule for ngClass
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { UserService } from 'src/app/services/user.service';
+import { ThemeToggleComponent } from 'src/app/theme-toggle/theme-toggle.component';
 
 @Component({
   selector: 'app-user-card',
   templateUrl: './user-card.component.html',
-  styleUrl: './user-card.component.css', 
-  standalone: false
+  styleUrls: ['./user-card.component.css'],
+  standalone: true,
+  imports: [CommonModule, ThemeToggleComponent]
 })
-export class UserCardComponent implements OnInit {
-  showSettings: boolean = false;
+export class UserCardComponent {
+  showSettings = false;
 
-  constructor(
-    private elementRef: ElementRef,
-    public userService: UserService
-  ) { }
+  constructor(public userService: UserService) {}
 
-  ngOnInit(): void {}
-
-  getInitials(name: string | null): string {
-    if (!name) return '';
-    const parts = name.split(' ');
-    let initials = '';
-    if (parts.length > 0) {
-      initials += parts[0].charAt(0);
-      if (parts.length > 1) {
-        initials += parts[parts.length - 1].charAt(0);
-      }
-    }
-    return initials.toUpperCase();
-  }
-
-  toggleSettings(): void {
+  toggleSettings() {
     this.showSettings = !this.showSettings;
   }
 
-  // HostListener to close the settings card when clicking outside
-  @HostListener('document:click', ['$event'])
-  onClick(event: Event): void {
-    if (!this.elementRef.nativeElement.contains(event.target) && this.showSettings) {
-      this.showSettings = false;
-    }
+  getInitials(name: string): string {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   }
 
-  logout(): void {
+  logout() {
     this.userService.logout();
     this.showSettings = false;
   }

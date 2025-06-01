@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { ProjectsService, Project, ProjectConfig } from '../../services/projects.service';
+import { ProjectsService, Project, ProjectConfig, OnPremConfig, DeploymentPlan } from '../../services/projects.service';
 import { StacksService, Stack } from '../../services/stacks.service';
 import { Subscription, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
@@ -44,29 +44,65 @@ interface ChatMessage {
   ]
 })
 export class ProjectDetailsComponent implements OnInit, OnDestroy {
-  project: Project | null = null;
-  userInput: string = '';
-  chatHistory: ChatMessage[] = [];
-  private projectId: string | null = null;
   private subscriptions: Subscription[] = [];
   isLoading: boolean = false;
   isDockerfileVisible: boolean = true;
-
-  // Dictionary to store configurations per project
-  private projectConfigs: Record<string, ProjectConfig> = {};
-
   techStacks: Stack[] = [];
-  selectedTech: Stack;
-  envVars: Record<string, string> = {};
   private envVarsUpdate = new Subject<Record<string, string>>();
 
-  deploymentConfig: ProjectConfig = {
-    stack: '',
-    envs: {},
-    deploymentPlan: 'aws'
-  };
+  // Dictionary to store all project-specific state
+  projectStates: Record<string, {
+    project: Project | null;
+    selectedTech: Stack;
+    envVars: Record<string, string>;
+    deploymentConfig: ProjectConfig;
+    chatHistory: ChatMessage[];
+    userInput: string;
+  }> = {};
 
-  deploymentPlans: { value: 'aws' | 'azure' | 'on-prem'; label: string }[] = [
+  // Current project ID
+  private projectId: string | null = null;
+
+  // Getters for current project state
+  get currentState() {
+    return this.projectId ? this.projectStates[this.projectId] : null;
+  }
+
+  get project() {
+    return this.currentState?.project ?? null;
+  }
+
+  get selectedTech() {
+    return this.currentState?.selectedTech ?? { name: '', content: '', file_path: '' };
+  }
+
+  get envVars() {
+    return this.currentState?.envVars ?? {};
+  }
+
+  get deploymentConfig() {
+    return this.currentState?.deploymentConfig ?? {
+      stack: '',
+      envs: {},
+      deploymentPlan: 'aws'
+    };
+  }
+
+  get chatHistory() {
+    return this.currentState?.chatHistory ?? [];
+  }
+
+  get userInput() {
+    return this.currentState?.userInput ?? '';
+  }
+
+  set userInput(value: string) {
+    if (this.projectId && this.projectStates[this.projectId]) {
+      this.projectStates[this.projectId].userInput = value;
+    }
+  }
+
+  deploymentPlans: { value: DeploymentPlan; label: string }[] = [
     { value: 'aws', label: 'AWS' },
     { value: 'azure', label: 'Azure' },
     { value: 'on-prem', label: 'On-Premises' }
@@ -79,9 +115,7 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
     private projectsService: ProjectsService,
     private stacksService: StacksService,
     private http: HttpClient
-  ) {
-    this.selectedTech = { name: '', content: '', file_path: '' };
-  }
+  ) {}
 
   ngOnInit() {
     // Subscribe to route params to get project ID
@@ -97,9 +131,8 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       this.stacksService.getStacks().subscribe({
         next: (stacks) => {
           this.techStacks = stacks;
-          if (stacks.length > 0 && !this.deploymentConfig.stack) {
-            this.selectedTech = { ...stacks[0] };
-            this.deploymentConfig.stack = stacks[0].name;
+          if (this.projectId && stacks.length > 0 && !this.deploymentConfig.stack) {
+            this.initializeProjectState(this.projectId, stacks[0] || { name: '', content: '', file_path: '' });
           }
         },
         error: (error) => {
@@ -108,18 +141,46 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       })
     );
 
-    
     // Subscribe to environment variables updates with debounce
     this.subscriptions.push(
       this.envVarsUpdate.pipe(
         debounceTime(100)  // 100ms debounce
       ).subscribe(envVars => {
-        this.deploymentConfig.envs = envVars;
-        if (this.selectedTech.file_path.endsWith('.j2')) {
-          this.renderTemplate();
+        if (this.projectId) {
+          this.updateProjectState(this.projectId, { envVars });
+          if (this.selectedTech.file_path.endsWith('.j2')) {
+            this.renderTemplate();
+          }
         }
       })
     );
+  }
+
+  private initializeProjectState(projectId: string, defaultTech: Stack) {
+    if (!this.projectStates[projectId]) {
+      this.projectStates[projectId] = {
+        project: null,
+        selectedTech: { ...defaultTech },
+        envVars: {},
+        deploymentConfig: {
+          stack: defaultTech.name,
+          envs: {},
+          deploymentPlan: 'aws'
+        },
+        chatHistory: [],
+        userInput: ''
+      };
+    }
+  }
+
+  private updateProjectState(projectId: string, updates: Partial<typeof this.projectStates[string]>) {
+    if (this.projectStates[projectId]) {
+      this.projectStates[projectId] = {
+        ...this.projectStates[projectId],
+        ...updates
+      };
+      this.validateDeployment();
+    }
   }
 
   private loadProjectDetails() {
@@ -130,27 +191,31 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       this.projectsService.projects$.subscribe(projects => {
         const foundProject = projects.find(p => p._id === this.projectId) || null;
         
-        if (foundProject) {
-          this.project = foundProject;
-          
+        if (foundProject && this.projectId) {
+          // Initialize state if it doesn't exist
+          if (!this.projectStates[this.projectId]) {
+            this.initializeProjectState(this.projectId, this.techStacks[0] || { name: '', content: '', file_path: '' });
+          }
+
+          // Update project in state
+          this.updateProjectState(this.projectId, {
+            project: foundProject
+          });
+
           // Load existing configuration if available
-          if (this.projectId) {
-            // Check if we have a cached config
-            if (this.projectConfigs[this.projectId]) {
-              this.deploymentConfig = { ...this.projectConfigs[this.projectId] };
-              this.envVars = { ...this.projectConfigs[this.projectId].envs };
-            } else if (foundProject.config) {
-              // If no cached config, use the one from the project
-              this.deploymentConfig = { ...foundProject.config };
-              this.envVars = { ...foundProject.config.envs };
-              // Cache the config
-              this.projectConfigs[this.projectId] = { ...foundProject.config };
-            }
+          if (foundProject.config) {
+            const config = foundProject.config;
+            this.updateProjectState(this.projectId, {
+              deploymentConfig: { ...config },
+              envVars: { ...config.envs }
+            });
 
             // Find and select the tech stack
-            const foundStack = this.techStacks.find(t => t.name === this.deploymentConfig.stack);
+            const foundStack = this.techStacks.find(t => t.name === config.stack);
             if (foundStack) {
-              this.selectedTech = { ...foundStack };
+              this.updateProjectState(this.projectId, {
+                selectedTech: { ...foundStack }
+              });
               this.onTechChange(foundStack.name);
             }
           }
@@ -160,26 +225,137 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
   }
 
   onTechChange(name: string) {
+    if (!this.projectId) return;
+
     const found = this.techStacks.find((t) => t.name === name) ?? this.techStacks[0];
-    this.selectedTech = { ...found };
-    this.deploymentConfig.stack = name;
     
-    if (this.projectId) {
-      // Update the cached config
-      this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
-    }
+    this.updateProjectState(this.projectId, {
+      selectedTech: { ...found },
+      deploymentConfig: {
+        ...this.deploymentConfig,
+        stack: name
+      }
+    });
     
-    if (this.selectedTech.file_path.endsWith('.j2')) {
+    if (found.file_path.endsWith('.j2')) {
       this.renderTemplate();
     }
-    this.validateDeployment();
   }
 
+  updateEnvVars(envVars: Record<string, string>) {
+    if (!this.projectId) return;
+
+    this.updateProjectState(this.projectId, {
+      envVars,
+      deploymentConfig: {
+        ...this.deploymentConfig,
+        envs: envVars
+      }
+    });
+    this.envVarsUpdate.next(envVars);
+  }
+
+  onDeploymentPlanChange(plan: DeploymentPlan) {
+    if (!this.projectId) return;
+
+    const baseConfig = {
+      stack: this.deploymentConfig.stack,
+      envs: this.deploymentConfig.envs,
+    };
+
+    let newConfig: ProjectConfig;
+
+    if (plan === 'on-prem') {
+      newConfig = {
+        ...baseConfig,
+        deploymentPlan: plan,
+        onPremConfig: {
+          ipAddress: '',
+          publicKey: '',
+          username: 'root'
+        }
+      };
+    } else if (plan === 'aws') {
+      newConfig = {
+        ...baseConfig,
+        deploymentPlan: plan
+      };
+    } else {
+      newConfig = {
+        ...baseConfig,
+        deploymentPlan: plan
+      };
+    }
+
+    this.updateProjectState(this.projectId, {
+      deploymentConfig: newConfig
+    });
+  }
+
+  updateOnPremConfig(field: 'ipAddress' | 'publicKey' | 'username', value: string) {
+    if (!this.projectId || this.deploymentConfig.deploymentPlan !== 'on-prem') return;
+
+    const newConfig = {
+      ...this.deploymentConfig,
+      onPremConfig: {
+        ...this.deploymentConfig.onPremConfig,
+        [field]: value
+      }
+    };
+
+    this.updateProjectState(this.projectId, {
+      deploymentConfig: newConfig
+    });
+  }
+
+  async deployConfiguration() {
+    if (!this.isDeploymentValid || !this.project?._id || !this.projectId) return;
+
+    try {
+      // Get the current project's configuration from the state
+      const currentConfig = this.projectStates[this.projectId].deploymentConfig;
+      
+      const updatedProject = await this.projectsService
+        .saveProjectConfig(this.project._id, currentConfig)
+        .toPromise();
+
+      console.log('Configuration saved successfully:', updatedProject);
+    } catch (error) {
+      console.error('Error saving configuration:', error);
+    }
+  }
+
+  async destroyProject() {
+    if (!this.project || !confirm('Are you sure you want to destroy this project? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await this.projectsService.deleteProject(this.project._id);
+      // Remove project state
+      if (this.projectId) {
+        delete this.projectStates[this.projectId];
+      }
+      // Navigate back to home page after successful deletion
+      this.router.navigate(['/']);
+    } catch (error) {
+      console.error('Error destroying project:', error);
+    }
+  }
+
+
   renderTemplate() {
+    if (!this.projectId) return;
+
     this.stacksService.renderTemplate(this.selectedTech.file_path, this.envVars)
       .subscribe({
         next: (content) => {
-          this.selectedTech.content = content;
+          this.updateProjectState(this.projectId!, {
+            selectedTech: {
+              ...this.selectedTech,
+              content
+            }
+          });
         },
         error: (error) => {
           console.error('Error rendering template:', error);
@@ -187,75 +363,12 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       });
   }
 
-  updateEnvVars(envVars: Record<string, string>) {
-    this.envVars = envVars;
-    this.deploymentConfig.envs = envVars;
-    
-    if (this.projectId) {
-      // Update the cached config
-      this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
-    }
-    
-    this.envVarsUpdate.next(envVars);
-    this.validateDeployment();
-  }
-
-  addEnvVar() {
-    const newKey = `ENV_VAR_${Object.keys(this.envVars).length + 1}`;
-    this.envVars[newKey] = '';
-    this.updateEnvVars(this.envVars);
-  }
-
-  removeEnvVar(key: string) {
-    const { [key]: removed, ...rest } = this.envVars;
-    this.envVars = rest;
-    this.updateEnvVars(this.envVars);
-  }
-
-  updateEnvVarKey(oldKey: string, newKey?: any) {
-    newKey = newKey?.target?.value;
-    if (newKey && newKey !== oldKey) {
-      const value = this.envVars[oldKey];
-      const { [oldKey]: removed, ...rest } = this.envVars;
-      this.envVars = { ...rest, [newKey]: value };
-      this.updateEnvVars(this.envVars);
-    }
-  }
-
-  onDeploymentPlanChange(plan: 'aws' | 'azure' | 'on-prem') {
-    this.deploymentConfig.deploymentPlan = plan;
-    if (plan !== 'on-prem') {
-      delete this.deploymentConfig.onPremConfig;
-    } else {
-      this.deploymentConfig.onPremConfig = {
-        ipAddress: '',
-        publicKey: '',
-        username: 'root'
-      };
-    }
-    
-    if (this.projectId) {
-      // Update the cached config
-      this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
-    }
-    
-    this.validateDeployment();
-  }
-
-  updateOnPremConfig(field: 'ipAddress' | 'publicKey' | 'username', value: string) {
-    if (this.deploymentConfig.deploymentPlan === 'on-prem' && this.deploymentConfig.onPremConfig) {
-      this.deploymentConfig.onPremConfig[field] = value;
-      
-      if (this.projectId) {
-        // Update the cached config
-        this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
-      }
-      
-      this.validateDeployment();
-    }
-  }
-
   validateDeployment() {
+    if (!this.projectId) {
+      this.isDeploymentValid = false;
+      return;
+    }
+
     if (!this.deploymentConfig.stack || !this.selectedTech) {
       this.isDeploymentValid = false;
       return;
@@ -285,49 +398,46 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
     });
   }
 
-  async deployConfiguration() {
-    if (!this.isDeploymentValid || !this.project?._id) return;
+  addEnvVar() {
+    if (!this.projectId) return;
+    const newKey = `ENV_VAR_${Object.keys(this.envVars).length + 1}`;
+    const newEnvVars = { ...this.envVars, [newKey]: '' };
+    this.updateEnvVars(newEnvVars);
+  }
 
-    try {
-      const updatedProject = await this.projectsService
-        .saveProjectConfig(this.project._id, this.deploymentConfig)
-        .toPromise();
+  removeEnvVar(key: string) {
+    if (!this.projectId) return;
+    const { [key]: removed, ...rest } = this.envVars;
+    this.updateEnvVars(rest);
+  }
 
-      console.log('Configuration saved successfully:', updatedProject);
-      
-      // Update the cached config after successful save
-      if (this.projectId) {
-        this.projectConfigs[this.projectId] = { ...this.deploymentConfig };
-      }
-    } catch (error) {
-      console.error('Error saving configuration:', error);
+  updateEnvVarKey(oldKey: string, event: any) {
+    if (!this.projectId) return;
+    const newKey = event?.target?.value;
+    if (newKey && newKey !== oldKey) {
+      const value = this.envVars[oldKey];
+      const { [oldKey]: removed, ...rest } = this.envVars;
+      this.updateEnvVars({ ...rest, [newKey]: value });
     }
   }
 
-  async destroyProject() {
-    if (!this.project || !confirm('Are you sure you want to destroy this project? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      await this.projectsService.deleteProject(this.project._id);
-      // Navigate back to home page after successful deletion
-      this.router.navigate(['/']);
-    } catch (error) {
-      console.error('Error destroying project:', error);
-      alert('Failed to destroy project. Please try again.');
-    }
+  toggleDockerfile() {
+    this.isDockerfileVisible = !this.isDockerfileVisible;
   }
 
   async sendMessage() {
-    if (!this.userInput.trim() || !this.project) return;
+    if (!this.projectId || !this.userInput.trim() || !this.project) return;
 
     const userMessage: ChatMessage = {
       type: 'user',
       content: this.userInput,
       timestamp: new Date()
     };
-    this.chatHistory.push(userMessage);
+
+    // Update chat history
+    this.updateProjectState(this.projectId, {
+      chatHistory: [...this.chatHistory, userMessage]
+    });
 
     this.isLoading = true;
     try {
@@ -345,9 +455,12 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
         content: result?.response || 'No response received',
         timestamp: new Date()
       };
-      this.chatHistory.push(assistantMessage);
-      
-      this.userInput = ''; // Clear input after successful send
+
+      // Update chat history and clear input
+      this.updateProjectState(this.projectId, {
+        chatHistory: [...this.chatHistory, assistantMessage],
+        userInput: ''
+      });
     } catch (error: any) {
       console.error('Error sending message:', error);
       const errorMessage: ChatMessage = {
@@ -355,14 +468,14 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
         content: 'Error: ' + (error.message || 'Failed to send message'),
         timestamp: new Date()
       };
-      this.chatHistory.push(errorMessage);
+      
+      // Update chat history with error
+      this.updateProjectState(this.projectId, {
+        chatHistory: [...this.chatHistory, errorMessage]
+      });
     } finally {
       this.isLoading = false;
     }
-  }
-
-  toggleDockerfile() {
-    this.isDockerfileVisible = !this.isDockerfileVisible;
   }
 
   ngOnDestroy() {

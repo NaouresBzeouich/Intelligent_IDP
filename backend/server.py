@@ -753,5 +753,68 @@ def render_stack():
             'details': str(e)
         }), 500
 
+@app.route('/api/projects/<project_id>/config', methods=['POST'])
+@auth.require_auth
+def save_project_config(project_id):
+    try:
+        # Get the configuration from request body
+        config = request.json
+        
+        # Validate config structure
+        required_fields = ['stack', 'envs', 'deploymentPlan']
+        if not all(field in config for field in required_fields):
+            return jsonify({
+                "error": "Missing required fields in config",
+                "required": required_fields
+            }), 400
+
+        # Find the project and verify ownership
+        project = db.projects.find_one({
+            "_id": ObjectId(project_id),
+            "status": "active"
+        })
+
+        if not project:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        if project['owner']['id'] != request.user["id"]:
+            return jsonify({
+                "error": "Unauthorized to modify this project"
+            }), 403
+
+        # Update project with new configuration and set deployed to true
+        result = db.projects.update_one(
+            {"_id": ObjectId(project_id)},
+            {
+                "$set": {
+                    "config": config,
+                    "deployed": True,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+
+        if result.modified_count == 0:
+            return jsonify({
+                "error": "Failed to update project configuration"
+            }), 500
+
+        # Get the updated project
+        updated_project = db.projects.find_one({"_id": ObjectId(project_id)})
+        updated_project['_id'] = str(updated_project['_id'])
+        updated_project['created_at'] = updated_project['created_at'].isoformat()
+        if 'updated_at' in updated_project:
+            updated_project['updated_at'] = updated_project['updated_at'].isoformat()
+
+        return jsonify(updated_project)
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to save project configuration",
+            "details": str(e)
+        }), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

@@ -5,16 +5,35 @@ import { GitHubAuthService } from './github-auth.service';
 import { GitHubRepo } from './github-repos.service';
 import { map } from 'rxjs/operators';
 
-export interface ProjectConfig {
+export interface OnPremConfig {
+  ipAddress: string;
+  publicKey: string;
+  username: string;
+}
+
+export type DeploymentPlan = 'aws' | 'azure' | 'on-prem';
+
+interface BaseProjectConfig {
   stack: string;
   envs: Record<string, string>;
-  deploymentPlan: 'aws' | 'azure' | 'on-prem';
-  onPremConfig?: {
-    ipAddress: string;
-    publicKey: string;
-    username: string;
-  };
 }
+
+interface AwsProjectConfig extends BaseProjectConfig {
+  deploymentPlan: 'aws';
+  onPremConfig?: never;
+}
+
+interface AzureProjectConfig extends BaseProjectConfig {
+  deploymentPlan: 'azure';
+  onPremConfig?: never;
+}
+
+interface OnPremProjectConfig extends BaseProjectConfig {
+  deploymentPlan: 'on-prem';
+  onPremConfig: OnPremConfig;
+}
+
+export type ProjectConfig = AwsProjectConfig | AzureProjectConfig | OnPremProjectConfig;
 
 export interface Project {
   _id: string;
