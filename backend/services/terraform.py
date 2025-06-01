@@ -57,8 +57,25 @@ def create_tf_azure(output_dir, instance_name):
 
     print(f"Generated Azure Terraform file at {output_file_path}")
 
-create_tf_aws("terraform_clients/client1_aws", "instance-name-1")
-#create_tf_azure("terraform_clients/client1_azure", "instance-name-1")
 
-create_tf_aws("terraform_clients/client2_aws", "instance-name-2")
-#create_tf_azure("terraform_clients/client2_azure", "instance-name-2")
+def create_tf(
+        type,
+        user_id,
+        project_name
+        ):
+    """
+    type: "aws" or "azure"
+    user_id: the user id of the client ( from the auth using the github )
+    project_name: the project name that the user wants to create the tf files for
+    """
+    if type == "aws":
+        create_tf_aws(f"clients/{user_id}/{project_name}", project_name)
+    elif type == "azure":
+        create_tf_azure(f"clients/{user_id}/{project_name}", project_name)
+
+
+create_tf(
+    type="azure",
+    user_id="client1",
+    project_name="project2")  
+

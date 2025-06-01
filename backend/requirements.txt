@@ -7,3 +7,4 @@ jinja2
 pymongo
 python-jwt
 colorama
+jwt
