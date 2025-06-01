@@ -23,12 +23,13 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
-def render_pipeline_script(public_repo_url,image_name,dockerhub_cred_Jenkins):
+def render_pipeline_script(public_repo_url,image_name,dockerhub_cred_Jenkins,branch="Main"):
     template = env.get_template('Jenkinsfile.j2')
     return template.render(
         public_repo_url=public_repo_url,
         image_name=image_name,
-        dockerhub_cred_Jenkins=dockerhub_cred_Jenkins
+        dockerhub_cred_Jenkins=dockerhub_cred_Jenkins,
+        branch=branch
     )
 
 def render_job_config(pipeline_script):
@@ -37,6 +38,33 @@ def render_job_config(pipeline_script):
         description="Pipeline to build and push Docker image",
         pipeline_script=pipeline_script
     )
+
+def create_jenkinsfile_jobConfig(user_id,repository_name,project_name=None,branch="Main"):
+    if project_name is None:
+        project_name = repository_name.split("/")[-1]
+    
+    output_dir=f"clients/{user_id}/{project_name}"
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    pipeline_script = render_pipeline_script(
+        repository_name,
+        project_name,
+        dockerhub_cred_Jenkins,
+        branch
+        )
+    job_config = render_job_config(pipeline_script)
+    
+    pipeline_script_path = os.path.join(output_dir, "Jenkinsfile")
+    with open(pipeline_script_path, "w") as fh:
+        fh.write(pipeline_script)
+    print(f"Generated Jenkinsfile at {pipeline_script_path}")
+
+    job_config_path = os.path.join(output_dir, "job_config.xml")
+    with open(job_config_path, "w") as fh:
+        fh.write(job_config)
+    print(f"Generated job_config.xml at {job_config_path}")
+
 
 def get_jenkins_crumb():
     crumb_url = f"{jenkins_url}/crumbIssuer/api/json"
@@ -90,21 +118,22 @@ def trigger_build(job_name):
         print(response.text)
 
 
-def create_jenkins_pipeline(
-        repository_name,
-        project_name=None,
-        ):
-    if project_name is None:
-        # we will extract the project name from the repository name
-        project_name = repository_name.split("/")[-1]
-        
-    image_name = f"{dockerhub_username}/{project_name}"
-    pipeline_script = render_pipeline_script(repository_name,image_name,dockerhub_cred_Jenkins)
-    job_config = render_job_config(pipeline_script)
+def create_jenkins_pipeline(user_id,  project_name ):
+    input_dir=f"clients/{user_id}/{project_name}"
+    # read the job_config.xml file
+    with open(os.path.join(input_dir, "job_config.xml"), "r") as fh:
+        job_config = fh.read()
     create_jenkins_job(project_name,job_config)
     trigger_build(project_name)
-    
 
 
-
-
+create_jenkinsfile_jobConfig(
+    user_id="client112",
+    repository_name="https://github.com/mohamedazizbalti/Blog-Website",
+    branch="master",
+    project_name="viva"
+)
+create_jenkins_pipeline(
+    user_id="client112",
+    project_name="viva"
+)

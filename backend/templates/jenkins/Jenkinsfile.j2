@@ -4,14 +4,14 @@ pipeline {
     stages {
         stage('Clone repo') {
             steps {
-                git url: '{{ public_repo_url }}', branch: 'master'
+                git url: '{{ public_repo_url }}', branch: '{{ branch }}'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    bat 'docker build -t {{ image_name }} .'
+                    bat 'docker build -t idpx/{{ image_name }} .'
                 }
             }
         }
@@ -27,7 +27,7 @@ pipeline {
                         )]){
                            bat '''
                             echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
-                            docker push {{ image_name }}:latest
+                            docker push idpx/{{ image_name }}:latest
                             '''
                             }
                         }
