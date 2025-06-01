@@ -3,7 +3,9 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProjectsService, Project } from '../../services/projects.service';
-import { Subscription } from 'rxjs';
+import { StacksService, Stack } from '../../services/stacks.service';
+import { Subscription, Subject } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 import { HighlightModule, HIGHLIGHT_OPTIONS } from 'ngx-highlightjs';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { MarkdownModule, MarkdownService } from 'ngx-markdown';
@@ -12,6 +14,19 @@ interface ChatMessage {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+}
+
+type DeploymentPlan = 'azure' | 'aws' | 'on-prem';
+
+interface DeploymentConfig {
+  stack: string;
+  envs: Record<string, string>;
+  deploymentPlan: DeploymentPlan;
+  onPremConfig?: {
+    ipAddress: string;
+    publicKey: string;
+    username: string;
+  };
 }
 
 @Component({
@@ -46,22 +61,32 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
   isLoading: boolean = false;
 
-  techStacks: { name: string, dockerfile: string }[] = [
-    { name: 'Node.js', dockerfile: `FROM node:18\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nCMD ["node", "index.js"]` },
-    { name: 'Python', dockerfile: `FROM python:3.11\nWORKDIR /app\nCOPY requirements.txt ./\nRUN pip install -r requirements.txt\nCOPY . .\nCMD ["python", "app.py"]` },
-    { name: 'Java', dockerfile: `FROM openjdk:17\nWORKDIR /app\nCOPY target/app.jar ./\nCMD ["java", "-jar", "app.jar"]` },
-    { name: 'Go', dockerfile: `FROM golang:1.20\nWORKDIR /app\nCOPY . .\nRUN go build -o app\nCMD ["./app"]` },
-    { name: 'PHP', dockerfile: `FROM php:8.2-apache\nCOPY src/ /var/www/html/\nEXPOSE 80` },
+  techStacks: Stack[] = [];
+  selectedTech: Stack;
+  envVars: Record<string, string> = {};
+  private envVarsUpdate = new Subject<Record<string, string>>();
+
+  // New properties for deployment configuration
+  deploymentConfig: DeploymentConfig = {
+    stack: '',
+    envs: {},
+    deploymentPlan: 'aws'
+  };
+  deploymentPlans: { value: DeploymentPlan; label: string }[] = [
+    { value: 'aws', label: 'AWS' },
+    { value: 'azure', label: 'Azure' },
+    { value: 'on-prem', label: 'On-Premises' }
   ];
-  selectedTech: { name: string, dockerfile: string };
+  isDeploymentValid = false;
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private projectsService: ProjectsService,
+    private stacksService: StacksService,
     private http: HttpClient
   ) {
-    this.selectedTech = { ...this.techStacks[0] };
+    this.selectedTech = { name: '', content: '', file_path: '' };
   }
 
   ngOnInit() {
@@ -72,6 +97,37 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
         this.loadProjectDetails();
       })
     );
+
+    // Load tech stacks
+    this.subscriptions.push(
+      this.stacksService.getStacks().subscribe({
+        next: (stacks) => {
+          this.techStacks = stacks;
+          if (stacks.length > 0) {
+            this.selectedTech = { ...stacks[0] };
+          }
+        },
+        error: (error) => {
+          console.error('Error loading tech stacks:', error);
+        }
+      })
+    );
+
+    // Subscribe to environment variables updates with debounce
+    this.subscriptions.push(
+      this.envVarsUpdate.pipe(
+        debounceTime(100)  // 100ms debounce
+      ).subscribe(envVars => {
+        if (this.selectedTech.file_path.endsWith('.j2')) {
+          this.renderTemplate();
+        }
+      })
+    );
+
+    // Initialize deployment config with first stack
+    if (this.techStacks.length > 0) {
+      this.deploymentConfig.stack = this.techStacks[0].name;
+    }
   }
 
   ngOnDestroy() {
@@ -96,6 +152,123 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
   onTechChange(name: string) {
     const found = this.techStacks.find((t) => t.name === name) ?? this.techStacks[0];
     this.selectedTech = { ...found };
+    this.deploymentConfig.stack = name;
+    
+    // If it's a Jinja2 template, render it
+    if (this.selectedTech.file_path.endsWith('.j2')) {
+      this.renderTemplate();
+    }
+    this.validateDeployment();
+  }
+
+  renderTemplate() {
+    this.stacksService.renderTemplate(this.selectedTech.file_path, this.envVars)
+      .subscribe({
+        next: (content) => {
+          this.selectedTech.content = content;
+        },
+        error: (error) => {
+          console.error('Error rendering template:', error);
+        }
+      });
+  }
+
+  updateEnvVars(envVars: Record<string, string>) {
+    this.envVars = envVars;
+    this.deploymentConfig.envs = envVars;
+    this.envVarsUpdate.next(envVars);
+    this.validateDeployment();
+  }
+
+  addEnvVar() {
+    const newKey = `ENV_VAR_${Object.keys(this.envVars).length + 1}`;
+    this.envVars[newKey] = '';
+    this.updateEnvVars(this.envVars);
+  }
+
+  removeEnvVar(key: string) {
+    const { [key]: removed, ...rest } = this.envVars;
+    this.envVars = rest;
+    this.updateEnvVars(this.envVars);
+  }
+
+  updateEnvVarKey(oldKey: string, newKey?: any) {
+    newKey = newKey?.target?.value;
+    if (newKey && newKey !== oldKey) {
+      const value = this.envVars[oldKey];
+      const { [oldKey]: removed, ...rest } = this.envVars;
+      this.envVars = { ...rest, [newKey]: value };
+      this.updateEnvVars(this.envVars);
+    }
+  }
+
+  onDeploymentPlanChange(plan: DeploymentPlan) {
+    this.deploymentConfig.deploymentPlan = plan;
+    if (plan !== 'on-prem') {
+      delete this.deploymentConfig.onPremConfig;
+    } else {
+      this.deploymentConfig.onPremConfig = {
+        ipAddress: '',
+        publicKey: '',
+        username: 'root'  // Default username
+      };
+    }
+    this.validateDeployment();
+  }
+
+  updateOnPremConfig(field: 'ipAddress' | 'publicKey' | 'username', value: string) {
+    if (this.deploymentConfig.deploymentPlan === 'on-prem' && this.deploymentConfig.onPremConfig) {
+      this.deploymentConfig.onPremConfig[field] = value;
+      this.validateDeployment();
+    }
+  }
+
+  validateDeployment() {
+    if (!this.deploymentConfig.stack || !this.selectedTech) {
+      this.isDeploymentValid = false;
+      return;
+    }
+
+    if (this.deploymentConfig.deploymentPlan === 'on-prem') {
+      const config = this.deploymentConfig.onPremConfig;
+      this.isDeploymentValid = !!(
+        config?.ipAddress &&
+        config.publicKey &&
+        config.username &&
+        this.validateIPAddress(config.ipAddress)
+      );
+    } else {
+      this.isDeploymentValid = true;
+    }
+  }
+
+  validateIPAddress(ipAddress: string): boolean {
+    const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipPattern.test(ipAddress)) return false;
+    
+    const parts = ipAddress.split('.');
+    return parts.every(part => {
+      const num = parseInt(part, 10);
+      return num >= 0 && num <= 255;
+    });
+  }
+
+  async deployConfiguration() {
+    if (!this.isDeploymentValid || !this.project) return;
+
+    try {
+      const response = await this.http.post('http://localhost:5000/api/deploy', {
+        projectId: this.project._id,
+        config: this.deploymentConfig
+      }).toPromise();
+
+      // Handle successful deployment
+      console.log('Deployment configuration sent successfully:', response);
+      // You might want to show a success message or redirect
+    } catch (error) {
+      console.error('Error deploying configuration:', error);
+      // Handle error (show error message, etc.)
+    }
   }
 
   async sendMessage() {

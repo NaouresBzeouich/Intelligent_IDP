@@ -38,13 +38,14 @@ export class AuthorizeComponent implements OnInit {
     // Post the message to the opener window
     if (window.opener) {
       console.log('[AuthorizeComponent] Found opener window. Posting message...');
+      console.log({ code, installation_id });
       window.opener.postMessage({ code, installation_id }, "*");
       console.log('[AuthorizeComponent] Message posted. Closing window...');
-      window.close();
+      // window.close();
     } else {
       console.warn('[AuthorizeComponent] No opener window found');
       console.log('[AuthorizeComponent] Closing window after timeout');
-      window.close();
+      // window.close();
     }
   }
 } 

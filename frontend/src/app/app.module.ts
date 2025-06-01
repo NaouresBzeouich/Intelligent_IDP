@@ -28,6 +28,7 @@ import { UserCardComponent } from './dashboard/navbar/user-card/user-card.compon
 import { ThemeToggleComponent } from './theme-toggle/theme-toggle.component';
 import { LoginComponent } from './components/login/login.component';
 import { AuthInterceptor } from './interceptors/auth.interceptor';
+import { StacksService } from './services/stacks.service';
 
 @NgModule({
   declarations: [
@@ -64,11 +65,15 @@ import { AuthInterceptor } from './interceptors/auth.interceptor';
   ],
   providers: [
     provideHttpClient(withInterceptorsFromDi()),
+    StacksService,
     {
       provide: HIGHLIGHT_OPTIONS,
       useValue: {
-        fullLibraryLoader: () => import('highlight.js'),
-      },
+        coreLibraryLoader: () => import('highlight.js/lib/core'),
+        languages: {
+          dockerfile: () => import('highlight.js/lib/languages/dockerfile')
+        }
+      }
     },
     {
       provide: HTTP_INTERCEPTORS,

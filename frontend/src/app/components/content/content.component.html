@@ -7,7 +7,7 @@
     <option *ngFor="let tech of techStacks" [value]="tech.name">{{ tech.name }}</option>
   </select>
 
-  <pre><code [highlight]="selectedTech().dockerfile" [language]="'dockerfile'"> </code></pre>
+  <pre><code [highlight]="selectedTech().content" [language]="'dockerfile'"> </code></pre>
   
 
   

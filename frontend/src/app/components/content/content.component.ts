@@ -1,4 +1,6 @@
-import { Component, signal, WritableSignal } from '@angular/core';
+import { Component, signal, WritableSignal, OnInit, OnDestroy } from '@angular/core';
+import { StacksService, Stack } from '../../services/stacks.service';
+import { Subscription } from 'rxjs';
 
 @Component({
     selector: 'app-content',
@@ -6,32 +8,35 @@ import { Component, signal, WritableSignal } from '@angular/core';
     styleUrls: ['./content.component.css'],
     standalone: false
 })
-export class ContentComponent {
-    
-    techStacks : {name:string, dockerfile:string}[] = [
-    
-        { name: 'Node.js', dockerfile: `FROM node:18\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nCMD ["node", "index.js"]` },
-    
-        { name: 'Python', dockerfile: `FROM python:3.11\nWORKDIR /app\nCOPY requirements.txt ./\nRUN pip install -r requirements.txt\nCOPY . .\nCMD ["python", "app.py"]` },
-    
-        { name: 'Java', dockerfile: `FROM openjdk:17\nWORKDIR /app\nCOPY target/app.jar ./\nCMD ["java", "-jar", "app.jar"]` },
-    
-        { name: 'Go', dockerfile: `FROM golang:1.20\nWORKDIR /app\nCOPY . .\nRUN go build -o app\nCMD ["./app"]` },
-    
-        { name: 'PHP', dockerfile: `FROM php:8.2-apache\nCOPY src/ /var/www/html/\nEXPOSE 80` },
-  ];
+export class ContentComponent implements OnInit, OnDestroy {
+    private subscriptions: Subscription[] = [];
+    techStacks: Stack[] = [];
+    selectedTech: WritableSignal<Stack> = signal({ name: '', content: '', file_path: '' });
 
-selectedTech : WritableSignal<{name: string  , dockerfile: string }> = signal({...this.techStacks[0]});
- 
-  
-  onTechChange(name: string) {
-    console.log(this.techStacks);
-    console.log("onchange to name");
-    console.log(name);
-    const found = this.techStacks.find((t) => t.name === name)??this.techStacks[0];
-    this.selectedTech.set({...found});
-    console.log(found , this.selectedTech());
-  }
+    constructor(private stacksService: StacksService) {}
 
+    ngOnInit() {
+        this.subscriptions.push(
+            this.stacksService.getStacks().subscribe({
+                next: (stacks) => {
+                    this.techStacks = stacks;
+                    if (stacks.length > 0) {
+                        this.selectedTech.set({ ...stacks[0] });
+                    }
+                },
+                error: (error) => {
+                    console.error('Error loading tech stacks:', error);
+                }
+            })
+        );
+    }
 
+    ngOnDestroy() {
+        this.subscriptions.forEach(sub => sub.unsubscribe());
+    }
+    
+    onTechChange(name: string) {
+        const found = this.techStacks.find((t) => t.name === name) ?? this.techStacks[0];
+        this.selectedTech.set({ ...found });
+    }
 }

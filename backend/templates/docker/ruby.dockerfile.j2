@@ -1,4 +1,6 @@
 FROM ruby:3.2
+{{ envs }}
+
 WORKDIR /app
 COPY . .
 RUN bundle install

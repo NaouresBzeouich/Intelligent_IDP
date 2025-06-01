@@ -12,6 +12,8 @@ from bson import ObjectId
 from dotenv import load_dotenv
 from middleware.auth_middleware import AuthMiddleware
 from colorama import init, Fore, Back, Style
+import glob
+from jinja2 import Environment, FileSystemLoader
 
 # Initialize colorama
 init(autoreset=True)
@@ -338,6 +340,7 @@ def create_project():
         # Check if project already exists
         existing_project = db.projects.find_one({
             "repo_full_name": data['repo_full_name'],
+            "user_id": request.user["id"],
             "status": "active"
         })
 
@@ -383,7 +386,8 @@ def create_project():
                 'id': request.user["id"],
                 'login': request.user["login"],
                 'avatar_url': request.user["avatar_url"]
-            }
+            },
+            'user_id': request.user["id"]
         }
 
         # Insert into MongoDB
@@ -418,7 +422,7 @@ def list_projects():
         # Build query - only show active projects for the authenticated user
         query = {
             "status": "active",
-            "owner.id": request.user["id"]
+            "user_id": request.user["id"]
         }
         if search:
             query["$or"] = [
@@ -521,7 +525,7 @@ def get_sidebar_projects():
         projects = list(db.projects.find(
             {
                 "status": "active",
-                "owner.id": request.user["id"]
+                "user_id": request.user["id"]
             },
             {
                 "repo_name": 1,
@@ -530,7 +534,9 @@ def get_sidebar_projects():
                 "created_at": 1,
                 "updated_at": 1,
                 "description": 1,
-                "metadata": 1
+                "metadata": 1,
+                "user_id": 1,  # Include user_id in projection
+                "owner": 1     # Include owner object for additional user info
             }
         ).sort("created_at", -1))
 
@@ -548,7 +554,14 @@ def get_sidebar_projects():
 
         return jsonify({
             "projects": projects,
-            "total": len(projects)
+            "total": len(projects),
+            "user_id": request.user["id"],  # Add authenticated user's ID
+            "user": {                       # Add user info
+                "id": request.user["id"],
+                "login": request.user["login"],
+                "name": request.user["name"],
+                "avatar_url": request.user["avatar_url"]
+            }
         })
 
     except Exception as e:
@@ -637,6 +650,107 @@ def get_user_repos():
         return jsonify({
             "error": "Failed to fetch repositories",
             "details": str(e)
+        }), 500
+
+@app.route('/api/stacks', methods=['GET'])
+@auth.require_auth
+def get_stacks():
+    try:
+        # Define the path to docker templates directory
+        templates_dir = './templates/docker'
+        
+        if not os.path.exists(templates_dir):
+            return jsonify({
+                'error': 'Docker templates directory not found',
+                'details': f'Directory {templates_dir} does not exist'
+            }), 404
+            
+        # Get all docker-compose and Dockerfile templates
+        templates = []
+        for ext in ['*.yml', '*.yaml', 'Dockerfile*','*.dockerfile','*.dockerfile.j2']:
+            templates.extend(glob.glob(os.path.join(templates_dir, ext)))
+        
+        # Set up Jinja2 environment
+        env = Environment(loader=FileSystemLoader('./templates/docker'))
+        
+        # Read and process each template
+        stack_list = []
+        for template_path in templates:
+            try:
+                template_name = os.path.basename(template_path)
+                if template_name.endswith('.j2'):
+                    # Process Jinja2 template
+                    template = env.get_template(template_name)
+                    content = template.render(envs='')  # Default empty string for envs
+                else:
+                    # Read regular file
+                    with open(template_path, 'r') as f:
+                        content = f.read()
+                    
+                # Get the filename without extension as the stack name
+                name = os.path.splitext(os.path.basename(template_path))[0].split('.')[0]
+                if name.lower() == 'dockerfile':
+                    # For Dockerfile variants, include the full name
+                    name = os.path.basename(template_path).split('.')[0]
+                
+                stack_list.append({
+                    'name': name,
+                    'content': content,
+                    'file_path': os.path.basename(template_path)
+                })
+            except IOError as e:
+                print(f"Error reading template {template_path}: {str(e)}")
+                continue
+                
+        return jsonify({
+            'stacks': stack_list,
+            'total': len(stack_list)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'error': 'Failed to fetch stack templates',
+            'details': str(e)
+        }), 500
+
+@app.route('/api/stacks/render', methods=['POST'])
+@auth.require_auth
+def render_stack():
+    try:
+        data = request.get_json()
+        template_name = data.get('template_name')
+        env_vars = data.get('env_vars', {})
+        
+        if not template_name:
+            return jsonify({
+                'error': 'Template name is required',
+                'details': 'Please provide a template_name in the request body'
+            }), 400
+            
+        # Convert env_vars dict to Docker ENV format
+        env_string = '\n'.join([f'ENV {key}="{value}"' for key, value in env_vars.items()]) or ''
+        
+        # Set up Jinja2 environment
+        env = Environment(loader=FileSystemLoader('./templates/docker'))
+        
+        try:
+            template = env.get_template(template_name)
+            rendered_content = template.render(envs=env_string)
+            
+            return jsonify({
+                'content': rendered_content
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'error': 'Failed to render template',
+                'details': str(e)
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'error': 'Failed to process request',
+            'details': str(e)
         }), 500
 
 if __name__ == '__main__':

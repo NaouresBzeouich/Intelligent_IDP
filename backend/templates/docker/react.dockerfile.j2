@@ -1,7 +1,10 @@
 FROM node:20 as builder
+{{ envs }}
 WORKDIR /app
 COPY . .
 RUN npm install && npm run build
 
 FROM nginx:alpine
+{{ envs }}
+
 COPY --from=builder /app/build /usr/share/nginx/html
