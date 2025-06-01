@@ -127,13 +127,13 @@ def create_jenkins_pipeline(user_id,  project_name ):
     trigger_build(project_name)
 
 
-create_jenkinsfile_jobConfig(
-    user_id="client112",
-    repository_name="https://github.com/mohamedazizbalti/Blog-Website",
-    branch="master",
-    project_name="viva"
-)
-create_jenkins_pipeline(
-    user_id="client112",
-    project_name="viva"
-)
+# create_jenkinsfile_jobConfig(
+#     user_id="client112",
+#     repository_name="https://github.com/mohamedazizbalti/Blog-Website",
+#     branch="master",
+#     project_name="viva"
+# )
+# create_jenkins_pipeline(
+#     user_id="client112",
+#     project_name="viva"
+# )

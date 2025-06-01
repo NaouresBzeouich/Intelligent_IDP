@@ -71,8 +71,8 @@ def create_ansible_files(user_id,project_name,docker_image_name=None,public_ip=N
     print(f"Generated Ansible deployment file at {deploy_path}")
 
 
-create_ansible_files(
-    user_id="client1",
-    project_name="project2",
-    docker_image_name="test1",
-    )
+# create_ansible_files(
+    # user_id="client1",
+    # project_name="project2",
+    # docker_image_name="test1",
+    # )

@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone repo') {
+            steps {
+                git url: 'https://github.com/NaouresBzeouich/air-quality-monitoring', branch: 'main'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    bat 'docker build -t idpx/683c73d66b8629fceb510c1e .'
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials(
+                        [usernamePassword(
+                            credentialsId: 'dockerhub-IDP-X' , 
+                            usernameVariable: 'DOCKERHUB_USER', 
+                            passwordVariable: 'DOCKERHUB_PASS'
+                        )]){
+                           bat '''
+                            echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                            docker push idpx/683c73d66b8629fceb510c1e:latest
+                            '''
+                            }
+                        }
+            }
+        }
+    }
+}

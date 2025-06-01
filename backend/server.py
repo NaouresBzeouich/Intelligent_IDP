@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 from groq import Groq
 import os
@@ -10,10 +10,13 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from bson import ObjectId
 from dotenv import load_dotenv
+from services.Jenkins import create_jenkinsfile_jobConfig
+from services.ansible import create_ansible_files
 from middleware.auth_middleware import AuthMiddleware
 from colorama import init, Fore, Back, Style
 import glob
 from jinja2 import Environment, FileSystemLoader
+from services.terraform import create_tf
 
 # Initialize colorama
 init(autoreset=True)
@@ -89,6 +92,11 @@ def create_jwt(app_id, private_key_pem):
         "iss": app_id
     }
     return jwt.JWT().encode(payload, jwt.jwk_from_pem(private_key_pem), alg="RS256")
+CLIENT_FOLDER = os.path.abspath('./clients')  # or './client' if same dir
+
+@app.route('/clients/<path:path>')
+def serve_client(path):
+    return send_from_directory(CLIENT_FOLDER, path)
 
 @app.route('/authorize', methods=['GET'])
 def authorize():
@@ -753,6 +761,73 @@ def render_stack():
             'details': str(e)
         }), 500
 
+def render_dockerfile(stack: str, env_vars: dict[str, str]) -> tuple[bool, str]:
+    """
+    Render a Dockerfile template with environment variables.
+    
+    Args:
+        stack (str): Name of the stack/template to use (e.g., 'node', 'python')
+        env_vars (dict[str, str]): Dictionary of environment variables
+        
+    Returns:
+        tuple[bool, str]: (success, content/error)
+        - success: True if template was rendered successfully, False otherwise
+        - content: Rendered template content if successful, error message if failed
+    """
+    try:
+        # Initialize Jinja2 environment
+        env = Environment(loader=FileSystemLoader('./templates/docker'))
+        
+        # Get the template
+        template_name = f"{stack}.dockerfile.j2"
+        template = env.get_template(template_name)
+        
+        # Convert env_vars dict to Docker ENV format
+        env_string = '\n'.join([f'ENV {key}="{value}"' for key, value in env_vars.items()]) or ''
+        
+        # Render the template
+        dockerfile_content = template.render(envs=env_string)
+        
+        return True, dockerfile_content
+        
+    except Exception as e:
+        return False, f"Failed to render Dockerfile template: {str(e)}"
+
+def save_dockerfile(content: str, user_id: str, project_id: str) -> tuple[bool, str]:
+    """
+    Save Dockerfile content to client/userid/projectid/Dockerfile
+    
+    Args:
+        content (str): Content of the Dockerfile
+        user_id (str): User ID
+        project_id (str): Project ID
+        
+    Returns:
+        tuple[bool, str]: (success, message)
+        - success: True if file was saved successfully, False otherwise
+        - message: Success message or error description
+    """
+    try:
+        # Create the directory path
+        dir_path = os.path.join('clients', str(user_id), str(project_id))
+        
+        # Create directories if they don't exist
+        os.makedirs(dir_path, exist_ok=True)
+        
+        # Full path for the Dockerfile
+        dockerfile_path = os.path.join(dir_path, 'Dockerfile')
+        
+        # Write the content to the Dockerfile
+        with open(dockerfile_path, 'w') as f:
+            f.write(content)
+            
+        return True, f"Dockerfile saved successfully at {dockerfile_path}"
+        
+    except OSError as e:
+        return False, f"Failed to create directory or save file: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error while saving Dockerfile: {str(e)}"
+
 @app.route('/api/projects/<project_id>/config', methods=['POST'])
 @auth.require_auth
 def save_project_config(project_id):
@@ -784,7 +859,7 @@ def save_project_config(project_id):
                 "error": "Unauthorized to modify this project"
             }), 403
 
-        # Update project with new configuration and set deployed to true
+        # Update project with new configuration
         result = db.projects.update_one(
             {"_id": ObjectId(project_id)},
             {
@@ -801,13 +876,49 @@ def save_project_config(project_id):
                 "error": "Failed to update project configuration"
             }), 500
 
+        # Save Dockerfile if stack is provided
+        if config.get('stack'):
+            # Render the Dockerfile
+            success, content = render_dockerfile(config['stack'], config['envs'])
+            if not success:
+                print(f"Warning: {content}")
+            else:
+                # Save the Dockerfile
+                save_success, save_message = save_dockerfile(
+                    content=content,
+                    user_id=request.user["id"],
+                    project_id=project_id
+                )
+                
+                if not save_success:
+                    print(f"Warning: Failed to save Dockerfile: {save_message}")
+        # create terraform files
+        create_tf(
+            type=config['deploymentPlan'],
+            user_id=request.user["id"],
+            project_name=project_id
+        )
+        
+        # create_ansible_files(
+        #     user_id=request.user["id"],
+        #     project_name=project_id,
+        #     docker_image_name=project_id,
+            
+        #     )
+        # get from database the project by id
+
         # Get the updated project
         updated_project = db.projects.find_one({"_id": ObjectId(project_id)})
         updated_project['_id'] = str(updated_project['_id'])
         updated_project['created_at'] = updated_project['created_at'].isoformat()
         if 'updated_at' in updated_project:
             updated_project['updated_at'] = updated_project['updated_at'].isoformat()
-
+        create_jenkinsfile_jobConfig(
+            user_id=request.user["id"],
+            project_name=project_id,
+            branch=updated_project["default_branch"],
+            repository_name=updated_project["repo_url"]
+        )
         return jsonify(updated_project)
 
     except Exception as e:

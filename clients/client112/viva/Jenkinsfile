@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone repo') {
+            steps {
+                git url: 'https://github.com/mohamedazizbalti/Blog-Website', branch: 'master'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    bat 'docker build -t idpx/viva .'
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials(
+                        [usernamePassword(
+                            credentialsId: 'dockerhub-IDP-X' , 
+                            usernameVariable: 'DOCKERHUB_USER', 
+                            passwordVariable: 'DOCKERHUB_PASS'
+                        )]){
+                           bat '''
+                            echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                            docker push idpx/viva:latest
+                            '''
+                            }
+                        }
+            }
+        }
+    }
+}

@@ -10,7 +10,7 @@ subscription_id = os.getenv("SUBSCRIPTION_ID")
 tenant_id = os.getenv("TENANT_ID")
 
 # Set up Jinja2 environment to load templates from current dir
-env = Environment(loader=FileSystemLoader(searchpath="./backend/templates/terraform"))
+env = Environment(loader=FileSystemLoader(searchpath="./templates/terraform"))
 
 
 def create_tf_aws(output_dir,instance_name):
@@ -74,8 +74,8 @@ def create_tf(
         create_tf_azure(f"clients/{user_id}/{project_name}", project_name)
 
 
-create_tf(
-    type="azure",
-    user_id="client1",
-    project_name="project2")  
+# create_tf(
+#     type="azure",
+#     user_id="client1",
+#     project_name="project2")  
 
