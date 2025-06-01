@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from groq import Groq
 import os
@@ -10,6 +10,22 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from bson import ObjectId
 from dotenv import load_dotenv
+from middleware.auth_middleware import AuthMiddleware
+from colorama import init, Fore, Back, Style
+
+# Initialize colorama
+init(autoreset=True)
+
+def log_auth(message: str, level: str = "info"):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if level == "error":
+        print(f"{Fore.RED}[{timestamp}] 🔒 AUTH ERROR: {message}{Style.RESET_ALL}")
+    elif level == "warning":
+        print(f"{Fore.YELLOW}[{timestamp}] ⚠️ AUTH WARNING: {message}{Style.RESET_ALL}")
+    elif level == "success":
+        print(f"{Fore.GREEN}[{timestamp}] ✅ AUTH SUCCESS: {message}{Style.RESET_ALL}")
+    else:
+        print(f"{Fore.BLUE}[{timestamp}] ℹ️ AUTH INFO: {message}{Style.RESET_ALL}")
 
 # Load environment variables
 load_dotenv()
@@ -32,20 +48,21 @@ CORS(app, resources={
             "https://tidy-definitely-sailfish.ngrok-free.app"
         ],
         "methods": ["GET", "POST", "OPTIONS", "DELETE"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+        "expose_headers": ["Set-Cookie"]
     }
 })
 
-# Initialize MongoDB client with connection pooling and timeout settings
+# Initialize MongoDB client
 try:
     mongo_client = MongoClient(
         MONGO_URI,
-        serverSelectionTimeoutMS=5000,  # 5 second timeout
-        connectTimeoutMS=10000,  # 10 second timeout
-        maxPoolSize=50,  # Maximum number of connections
-        retryWrites=True  # Enable retryable writes
+        serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=10000,
+        maxPoolSize=50,
+        retryWrites=True
     )
-    # Verify connection
     mongo_client.admin.command('ping')
     print("Successfully connected to MongoDB Atlas")
     db = mongo_client[DB_NAME]
@@ -54,6 +71,13 @@ except (ConnectionFailure, ServerSelectionTimeoutError) as e:
     raise
 
 client = Groq(api_key=("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"))
+
+# Load the private key for JWT signing
+with open(PRIVATE_KEY_PATH, "rb") as f:
+    PRIVATE_KEY_PEM = f.read()
+
+# Initialize auth middleware with PEM key
+auth = AuthMiddleware(PRIVATE_KEY_PEM)
 
 def create_jwt(app_id, private_key_pem):
     now = int(time.time())
@@ -70,48 +94,128 @@ def authorize():
     installation_id = request.args.get('installation_id')
 
     if not code or not installation_id:
+        log_auth("Missing 'code' or 'installation_id' query parameter", "error")
         return jsonify({"error": "Missing 'code' or 'installation_id' query parameter"}), 400
 
-    # 1. Exchange code for OAuth access token
-    token_url = "https://github.com/login/oauth/access_token"
-    headers = {"Accept": "application/json"}
-    data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "code": code,
-    }
-    token_resp = requests.post(token_url, headers=headers, data=data)
-    if token_resp.status_code != 200:
-        return jsonify({"error": "Failed to get OAuth token", "details": token_resp.text}), 400
-    print("Token response:", token_resp.json())
-    oauth_token = token_resp.json().get("access_token")
+    try:
+        log_auth(f"Starting OAuth flow for installation_id: {installation_id}")
+        
+        # Exchange code for OAuth access token
+        token_url = "https://github.com/login/oauth/access_token"
+        headers = {"Accept": "application/json"}
+        data = {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "code": code,
+        }
+        token_resp = requests.post(token_url, headers=headers, data=data)
+        if token_resp.status_code != 200:
+            log_auth(f"Failed to get OAuth token: {token_resp.text}", "error")
+            return jsonify({"error": "Failed to get OAuth token", "details": token_resp.text}), 400
+        
+        oauth_token = token_resp.json().get("access_token")
+        if not oauth_token:
+            log_auth("OAuth token not found in response", "error")
+            return jsonify({"error": "OAuth token not found in response"}), 400
 
-    if not oauth_token:
-        return jsonify({"error": "OAuth token not found in response"}), 400
+        log_auth("Successfully obtained OAuth token", "success")
 
-    # 2. Load private key and create JWT
-    with open(PRIVATE_KEY_PATH, "rb") as f:
-        private_key_pem = f.read()
+        # Get GitHub user information
+        user_headers = {
+            'Authorization': f'Bearer {oauth_token}',
+            'Accept': 'application/vnd.github+json'
+        }
+        user_response = requests.get('https://api.github.com/user', headers=user_headers)
+        if user_response.status_code != 200:
+            log_auth(f"Failed to get user information: {user_response.text}", "error")
+            return jsonify({
+                "error": "Failed to get user information",
+                "details": user_response.json()
+            }), 400
 
-    jwt_token = create_jwt(APP_ID, private_key_pem)
+        user_data = user_response.json()
+        log_auth(f"Retrieved user info for: {user_data.get('login')}", "success")
 
-    # 3. Request installation access token
-    install_token_url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-        "Accept": "application/vnd.github+json",
-    }
-    install_resp = requests.post(install_token_url, headers=headers)
-    if install_resp.status_code != 201:
-        return jsonify({"error": "Failed to get installation token", "details": install_resp.text}), 400
+        # Create GitHub App JWT
+        github_jwt = create_jwt(APP_ID, PRIVATE_KEY_PEM)
+        log_auth("Created GitHub App JWT token", "success")
 
-    installation_token = install_resp.json().get("token")
+        # Request installation access token
+        install_token_url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
+        headers = {
+            "Authorization": f"Bearer {github_jwt}",
+            "Accept": "application/vnd.github+json",
+        }
+        install_resp = requests.post(install_token_url, headers=headers)
+        if install_resp.status_code != 201:
+            log_auth(f"Failed to get installation token: {install_resp.text}", "error")
+            return jsonify({"error": "Failed to get installation token", "details": install_resp.text}), 400
 
-    # Return both tokens
-    return jsonify({
-        "oauth_token": oauth_token,
-        "installation_token": installation_token
-    })
+        installation_token = install_resp.json().get("token")
+        log_auth("Successfully obtained installation token", "success")
+
+        # Create JWT payload with user info and tokens
+        jwt_payload = {
+            "user_id": user_data["id"],
+            "login": user_data["login"],
+            "name": user_data.get("name"),
+            "avatar_url":  user_data["avatar_url"],
+            "oauth_token":  oauth_token,
+            "installation_token": installation_token,
+        }
+
+        # Create JWT token using the same PEM key
+        auth_token = jwt.JWT().encode(jwt_payload, jwt.jwk_from_pem(PRIVATE_KEY_PEM), alg="RS256")
+        log_auth(f"Created JWT token for user: {user_data['login']}", "success")
+
+        # Create response with both JSON data and cookie
+        response = make_response(jsonify({
+            "token": auth_token,
+            "user": {
+                "id": user_data["id"],
+                "login": user_data["login"],
+                "name": user_data.get("name"),
+                "avatar_url": user_data["avatar_url"]
+            }
+        }))
+
+        # Set JWT token as HTTP-only cookie
+        response.set_cookie(
+            'Authorization',
+            auth_token,
+            httponly=True,
+            secure=False,  # Set to True in production with HTTPS
+            samesite='Lax',
+            max_age=86400,  # 24 hours in seconds
+            path='/'
+        )
+        log_auth(f"Set auth cookie for user: {user_data['login']}", "success")
+
+        # Set CORS headers explicitly
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        
+        return response
+
+    except Exception as e:
+        log_auth(f"Authorization error: {str(e)}", "error")
+        return jsonify({
+            "error": "Authorization failed",
+            "details": str(e)
+        }), 500
+
+# Update the existing auth check in other endpoints to use the new JWT token
+def verify_jwt_token(token):
+    try:
+        decoded = jwt.JWT().decode(token, jwt.jwk_from_pem(PRIVATE_KEY_PEM), algorithms={"RS256"}, do_verify=True)
+        log_auth(f"Successfully verified JWT token for user: {decoded.get('login')}", "success")
+        return decoded
+    except jwt.ExpiredSignatureError:
+        log_auth("JWT token expired", "warning")
+        return None
+    except jwt.InvalidTokenError as e:
+        log_auth(f"Invalid JWT token: {str(e)}", "error")
+        return None
 
 @app.before_request
 def log_request_info():
@@ -161,12 +265,69 @@ def chat():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/user/profile', methods=['GET'])
+@auth.require_auth
+def get_user_profile():
+    try:
+        return jsonify({
+            "user": {
+                "id": request.user["id"],
+                "login": request.user["login"],
+                "name": request.user["name"],
+                "avatar_url": request.user["avatar_url"]
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to get user profile",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/repositories', methods=['GET'])
+@auth.require_auth
+def get_repositories():
+    try:
+        # Use the oauth_token from the request object
+        headers = {
+            'Authorization': f'Bearer {request.oauth_token}',
+            'Accept': 'application/vnd.github+json'
+        }
+        
+        # Get user's repositories
+        response = requests.get(
+            'https://api.github.com/user/repos',
+            headers=headers,
+            params={
+                'sort': 'updated',
+                'per_page': 100,
+                'visibility': 'all'
+            }
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                "error": "Failed to fetch repositories",
+                "details": response.json()
+            }), response.status_code
+
+        repos = response.json()
+        return jsonify({
+            "repositories": repos,
+            "total": len(repos)
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to fetch repositories",
+            "details": str(e)
+        }), 500
+
 @app.route('/api/projects', methods=['POST'])
+@auth.require_auth
 def create_project():
     data = request.json
-    required_fields = ['repo_name', 'repo_full_name', 'repo_url', 'default_branch', 'installation_token', 'oauth_token']
+    required_fields = ['repo_name', 'repo_full_name', 'repo_url', 'default_branch']
     
-    # Validate request data
     if not all(field in data for field in required_fields):
         return jsonify({
             "error": "Missing required fields",
@@ -185,11 +346,11 @@ def create_project():
                 "error": "Project already exists",
                 "project_id": str(existing_project['_id']),
                 "repo_name": existing_project['repo_name']
-            }), 409  # HTTP 409 Conflict
+            }), 409
 
-        # Verify repository access using installation token
+        # Verify repository access using oauth_token from request
         headers = {
-            'Authorization': f'Bearer {data["oauth_token"]}',
+            'Authorization': f'Bearer {request.oauth_token}',
             'Accept': 'application/vnd.github+json'
         }
         repo_check = requests.get(
@@ -197,27 +358,13 @@ def create_project():
             headers=headers
         )
 
-        # if repo_check.status_code != 200:
-        #     return jsonify({
-        #         "error": "Failed to verify repository access",
-        #         "details": repo_check.json()
-        #     }), 400
-
-        # Get user info for project ownership
-        user_headers = {
-            'Authorization': f'Bearer {data["oauth_token"]}',
-            'Accept': 'application/vnd.github+json'
-        }
-        user_response = requests.get('https://api.github.com/user', headers=user_headers)
-        if user_response.status_code != 200:
+        if repo_check.status_code != 200:
             return jsonify({
-                "error": "Failed to get user information",
-                "details": user_response.json()
-            }), 400
+                "error": "Failed to verify repository access",
+                "details": repo_check.json()
+            }), 403
 
-        user_data = user_response.json()
-
-        # Prepare project document with additional fields
+        # Prepare project document
         project = {
             'repo_name': data['repo_name'],
             'repo_full_name': data['repo_full_name'],
@@ -233,13 +380,13 @@ def create_project():
                 'branch_protection': False
             },
             'owner': {
-                'id': user_data['id'],
-                'login': user_data['login'],
-                'avatar_url': user_data['avatar_url']
+                'id': request.user["id"],
+                'login': request.user["login"],
+                'avatar_url': request.user["avatar_url"]
             }
         }
 
-        # Insert into MongoDB with write concern for durability
+        # Insert into MongoDB
         result = db.projects.insert_one(project)
 
         return jsonify({
@@ -260,6 +407,7 @@ def create_project():
         }), 500
 
 @app.route('/api/projects', methods=['GET'])
+@auth.require_auth
 def list_projects():
     try:
         # Support pagination and filtering
@@ -267,8 +415,11 @@ def list_projects():
         per_page = int(request.args.get('per_page', 10))
         search = request.args.get('search', '')
         
-        # Build query - only show active projects
-        query = {"status": "active"}
+        # Build query - only show active projects for the authenticated user
+        query = {
+            "status": "active",
+            "owner.id": request.user["id"]
+        }
         if search:
             query["$or"] = [
                 {"repo_name": {"$regex": search, "$options": "i"}},
@@ -316,30 +467,9 @@ def list_projects():
         }), 500
 
 @app.route('/api/projects/<project_id>', methods=['DELETE'])
+@auth.require_auth
 def delete_project(project_id):
     try:
-        # Get the GitHub token from the Authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "No authorization token provided"}), 401
-
-        token = auth_header.split(' ')[1]
-
-        # Get user info from GitHub
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'Accept': 'application/vnd.github+json'
-        }
-        user_response = requests.get('https://api.github.com/user', headers=headers)
-        if user_response.status_code != 200:
-            return jsonify({
-                "error": "Failed to verify user",
-                "details": user_response.json()
-            }), 401
-
-        user_data = user_response.json()
-        user_id = user_data['id']
-
         # Find the project and verify ownership
         project = db.projects.find_one({
             "_id": ObjectId(project_id),
@@ -351,7 +481,7 @@ def delete_project(project_id):
                 "error": "Project not found"
             }), 404
 
-        if project['owner']['id'] != user_id:
+        if project['owner']['id'] != request.user["id"]:
             return jsonify({
                 "error": "Unauthorized to delete this project"
             }), 403
@@ -363,7 +493,7 @@ def delete_project(project_id):
                 "$set": {
                     "status": "deleted",
                     "deleted_at": datetime.datetime.utcnow(),
-                    "deleted_by": user_id
+                    "deleted_by": request.user["id"]
                 }
             }
         )
@@ -384,35 +514,14 @@ def delete_project(project_id):
         }), 500
 
 @app.route('/api/projects/sidebar', methods=['GET'])
+@auth.require_auth
 def get_sidebar_projects():
     try:
-        # Get the GitHub token from the Authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "No authorization token provided"}), 401
-
-        token = auth_header.split(' ')[1]
-
-        # Get user info from GitHub
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'Accept': 'application/vnd.github+json'
-        }
-        user_response = requests.get('https://api.github.com/user', headers=headers)
-        if user_response.status_code != 200:
-            return jsonify({
-                "error": "Failed to verify user",
-                "details": user_response.json()
-            }), 401
-
-        user_data = user_response.json()
-        user_id = user_data['id']
-
         # Get user's active projects only
         projects = list(db.projects.find(
             {
                 "status": "active",
-                "owner.id": user_id
+                "owner.id": request.user["id"]
             },
             {
                 "repo_name": 1,
@@ -445,6 +554,88 @@ def get_sidebar_projects():
     except Exception as e:
         return jsonify({
             "error": "Failed to fetch projects",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/github/<path:github_path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+@auth.require_auth
+def github_proxy(github_path):
+    try:
+        # Build the GitHub API URL
+        github_url = f'https://api.github.com/{github_path}'
+        
+        # Forward the request method and body
+        method = request.method
+        data = request.get_json(silent=True)
+        params = request.args.to_dict()
+        
+        # Set up headers with OAuth token
+        headers = {
+            'Authorization': f'Bearer {request.oauth_token}',
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+
+        # Forward the request to GitHub API
+        response = requests.request(
+            method=method,
+            url=github_url,
+            headers=headers,
+            json=data if data else None,
+            params=params
+        )
+
+        return response.json(), response.status_code
+
+    except Exception as e:
+        return jsonify({
+            "error": "GitHub API request failed",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/repos', methods=['GET'])
+@auth.require_auth
+def get_user_repos():
+    try:
+        # Get query parameters
+        sort = request.args.get('sort', 'updated')
+        per_page = request.args.get('per_page', '100')
+        visibility = request.args.get('visibility', 'all')
+
+        # Make request to GitHub API using oauth_token
+        headers = {
+            'Authorization': f'Bearer {request.oauth_token}',
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+
+        response = requests.get(
+            'https://api.github.com/user/repos',
+            headers=headers,
+            params={
+                'sort': sort,
+                'per_page': per_page,
+                'visibility': visibility
+            }
+        )
+
+        if response.status_code != 200:
+            return jsonify({
+                "error": "Failed to fetch repositories",
+                "details": response.json()
+            }), response.status_code
+
+        repos = response.json()
+        
+        # Transform the response if needed
+        return jsonify({
+            "repositories": repos,
+            "total": len(repos)
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to fetch repositories",
             "details": str(e)
         }), 500
 

@@ -2,9 +2,14 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
-interface AuthTokens {
-  oauth_token: string;
-  installation_token: string;
+interface AuthResponse {
+  token: string;
+  user: {
+    id: number;
+    login: string;
+    name: string | null;
+    avatar_url: string;
+  };
 }
 
 interface OAuthCallbackData {
@@ -20,37 +25,17 @@ export class GitHubAuthService {
   state = crypto.randomUUID();
   private popup: Window | null = null;
   private messageListener: ((event: MessageEvent) => void) | null = null;
+  private currentUser: AuthResponse['user'] | null = null;
+  private authToken: string | null = null;
 
   constructor(private http: HttpClient) {
     console.log('[GitHubAuthService] Initialized with redirect URI:', this.redirectUri);
-  }
-
-  private setCookie(name: string, value: string, expirationDays: number = 7) {
-    const date = new Date();
-    date.setTime(date.getTime() + (expirationDays * 24 * 60 * 60 * 1000));
-    const expires = `expires=${date.toUTCString()}`;
-    document.cookie = `${name}=${value};${expires};path=/;Secure;SameSite=Strict`;
-    console.log(`[GitHubAuthService] Cookie set: ${name} (expires: ${date.toUTCString()})`);
-  }
-
-  private getCookie(name: string): string | null {
-    const cookieName = `${name}=`;
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-      cookie = cookie.trim();
-      if (cookie.startsWith(cookieName)) {
-        const value = cookie.substring(cookieName.length);
-        console.log(`[GitHubAuthService] Retrieved cookie: ${name}`);
-        return value;
-      }
+    // Try to get the token and user info from storage on initialization
+    this.authToken = localStorage.getItem('auth_token');
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      this.currentUser = JSON.parse(storedUser);
     }
-    console.log(`[GitHubAuthService] Cookie not found: ${name}`);
-    return null;
-  }
-
-  private deleteCookie(name: string) {
-    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-    console.log(`[GitHubAuthService] Deleted cookie: ${name}`);
   }
 
   private cleanup() {
@@ -66,7 +51,7 @@ export class GitHubAuthService {
     }
   }
 
-  async startLogin(): Promise<AuthTokens> {
+  async startLogin(): Promise<AuthResponse> {
     // Clean up any existing login attempt
     this.cleanup();
 
@@ -103,9 +88,6 @@ export class GitHubAuthService {
         }, 1000);
 
         this.messageListener = (event: MessageEvent) => {
-          // console.log('[GitHubAuthService] Received message event data:', event.data);
-
-          // Check if the popup is still open
           if (this.popup?.closed) {
             clearInterval(popupCheckInterval);
             clearTimeout(timeoutId);
@@ -114,27 +96,21 @@ export class GitHubAuthService {
             return;
           }
 
-          // Validate that we have the required data
           if (!event.data || typeof event.data !== 'object') {
-            // console.log('[GitHubAuthService] Ignored invalid message format');
             return;
           }
 
           const { code, installation_id } = event.data;
           if (!code || !installation_id) {
-            // console.log('[GitHubAuthService] Ignored message missing required fields');
             return;
           }
 
-          // Clear intervals and timeouts
           clearInterval(popupCheckInterval);
           clearTimeout(timeoutId);
-          
-          // Clean up
           this.cleanup();
           
           console.log('[GitHubAuthService] Received valid OAuth callback data:', {
-            code:code,
+            code: code,
             installation_id: installation_id
           });
 
@@ -144,18 +120,19 @@ export class GitHubAuthService {
         window.addEventListener('message', this.messageListener);
       });
 
-      console.log('[GitHubAuthService] Exchanging code for tokens with backend...');
-      const tokens = await this.exchangeCodeForTokens(callbackData.code, callbackData.installation_id);
-      console.log('[GitHubAuthService] Successfully received tokens from backend:', {
-        oauth_token: tokens.oauth_token,
-        installation_token: tokens.installation_token
-      });
+      console.log('[GitHubAuthService] Exchanging code for auth response with backend...');
+      const authResponse = await this.exchangeCodeForTokens(callbackData.code, callbackData.installation_id);
+      console.log('[GitHubAuthService] Successfully received auth response from backend');
       
-      console.log('[GitHubAuthService] Storing tokens in cookies...');
-      this.setCookie('oauth_token', tokens.oauth_token);
-      this.setCookie('installation_token', tokens.installation_token);
+      // Store the token and user information
+      this.authToken = authResponse.token;
+      this.currentUser = authResponse.user;
       
-      return tokens;
+      // Store in localStorage for persistence
+      localStorage.setItem('auth_token', authResponse.token);
+      localStorage.setItem('user', JSON.stringify(authResponse.user));
+      
+      return authResponse;
     } catch (error) {
       this.cleanup();
       console.error('[GitHubAuthService] Error during login process:', error);
@@ -163,27 +140,21 @@ export class GitHubAuthService {
     }
   }
 
-  private async exchangeCodeForTokens(code: string, installation_id: string): Promise<AuthTokens> {
+  private async exchangeCodeForTokens(code: string, installation_id: string): Promise<AuthResponse> {
     console.log('[GitHubAuthService] Making request to backend:', {
       url: `${this.backendUrl}/authorize`,
-      params: { 
-        code: code , 
-        installation_id: installation_id 
-      }
+      params: { code, installation_id }
     });
 
     try {
       const response = await firstValueFrom(
-        this.http.get<AuthTokens>(`${this.backendUrl}/authorize`, {
-          params: { code, installation_id }
+        this.http.get<AuthResponse>(`${this.backendUrl}/authorize`, {
+          params: { code, installation_id },
+          withCredentials: true  // Enable sending and receiving cookies
         })
       );
 
-      console.log('[GitHubAuthService] Backend response received:', {
-        oauth_token: response.oauth_token ,
-        installation_token: response.installation_token 
-      });
-
+      console.log('[GitHubAuthService] Backend response received with JWT and user info');
       return response;
     } catch (error) {
       console.error('[GitHubAuthService] Backend request failed:', error);
@@ -191,25 +162,44 @@ export class GitHubAuthService {
     }
   }
 
-  getStoredTokens(): AuthTokens | { oauth_token: string | null; installation_token: string | null } {
-    console.log('[GitHubAuthService] Retrieving stored tokens from cookies...');
-    const tokens = {
-      oauth_token: this.getCookie('oauth_token'),
-      installation_token: this.getCookie('installation_token')
-    };
-    
-    console.log('[GitHubAuthService] Retrieved tokens:', {
-      oauth_token: tokens.oauth_token ,
-      installation_token: tokens.installation_token 
-    });
-    
-    return tokens;
+  getCurrentUser(): AuthResponse['user'] | null {
+    return this.currentUser;
+  }
+
+  getAuthToken(): string | null {
+    return this.authToken;
   }
 
   clearTokens() {
-    console.log('[GitHubAuthService] Clearing all stored tokens...');
-    this.deleteCookie('oauth_token');
-    this.deleteCookie('installation_token');
-    console.log('[GitHubAuthService] All tokens cleared');
+    this.authToken = null;
+    this.currentUser = null;
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    // Clear the auth cookie
+    document.cookie = 'Authorization=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;';
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.authToken && !!this.currentUser;
+  }
+
+  async refreshUserProfile(): Promise<void> {
+    if (!this.isAuthenticated()) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.http.get<{ user: AuthResponse['user'] }>(`${this.backendUrl}/api/user/profile`, {
+          withCredentials: true  // Enable sending and receiving cookies
+        })
+      );
+      
+      this.currentUser = response.user;
+      localStorage.setItem('user', JSON.stringify(response.user));
+    } catch (error) {
+      console.error('[GitHubAuthService] Failed to refresh user profile:', error);
+      throw error;
+    }
   }
 }

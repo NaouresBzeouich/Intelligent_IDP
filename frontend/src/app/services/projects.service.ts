@@ -34,18 +34,16 @@ export class ProjectsService {
   }
 
   private getHeaders(): HttpHeaders {
-    const tokens = this.authService.getStoredTokens();
+    // The JWT token is automatically included in cookies, but we still need the Accept header
     return new HttpHeaders({
-      'Authorization': `Bearer ${tokens.oauth_token}`,
       'Accept': 'application/json'
     });
   }
 
   async loadProjects(): Promise<void> {
     try {
-      const tokens = this.authService.getStoredTokens();
-      if (!tokens.oauth_token) {
-        console.log('[ProjectsService] No OAuth token found, skipping project load');
+      if (!this.authService.isAuthenticated()) {
+        console.log('[ProjectsService] Not authenticated, skipping project load');
         this.projectsSubject.next([]);
         return;
       }
@@ -66,9 +64,8 @@ export class ProjectsService {
 
   async addProject(repo: GitHubRepo): Promise<void> {
     try {
-      const tokens = this.authService.getStoredTokens();
-      if (!tokens.oauth_token || !tokens.installation_token) {
-        throw new Error('Missing required tokens');
+      if (!this.authService.isAuthenticated()) {
+        throw new Error('Not authenticated');
       }
 
       console.log('[ProjectsService] Adding new project:', repo.name);
@@ -77,9 +74,7 @@ export class ProjectsService {
         repo_name: repo.name,
         repo_full_name: repo.full_name,
         repo_url: repo.html_url,
-        default_branch: repo.default_branch,
-        installation_token: tokens.installation_token,
-        oauth_token: tokens.oauth_token
+        default_branch: repo.default_branch
       }, { headers: this.getHeaders() }).toPromise();
 
       // Refresh the projects list
@@ -92,6 +87,10 @@ export class ProjectsService {
 
   async deleteProject(projectId: string): Promise<void> {
     try {
+      if (!this.authService.isAuthenticated()) {
+        throw new Error('Not authenticated');
+      }
+
       console.log('[ProjectsService] Deleting project:', projectId);
       
       await this.http.delete(`${this.backendUrl}/api/projects/${projectId}`, {

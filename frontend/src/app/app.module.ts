@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
-import { HttpClientModule } from '@angular/common/http';
+import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { MarkdownModule } from 'ngx-markdown';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -27,6 +27,7 @@ import { NavbarComponent } from './dashboard/navbar/navbar/navbar.component';
 import { UserCardComponent } from './dashboard/navbar/user-card/user-card.component';
 import { ThemeToggleComponent } from './theme-toggle/theme-toggle.component';
 import { LoginComponent } from './components/login/login.component';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 
 @NgModule({
   declarations: [
@@ -69,6 +70,11 @@ import { LoginComponent } from './components/login/login.component';
         fullLibraryLoader: () => import('highlight.js'),
       },
     },
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: AuthInterceptor,
+      multi: true
+    }
   ],
   bootstrap: [AppComponent],
 })

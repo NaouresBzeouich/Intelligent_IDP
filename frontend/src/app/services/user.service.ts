@@ -6,10 +6,8 @@ import { GitHubAuthService } from './github-auth.service';
 interface GitHubUser {
   login: string;
   avatar_url: string;
-  name: string;
-  email: string;
-  bio: string;
-  id : number;
+  name: string | null;
+  id: number;
 }
 
 interface UserState {
@@ -41,50 +39,23 @@ export class UserService {
 
   private async checkAuthState() {
     console.log('[UserService] Checking authentication state...');
-    const tokens = this.authService.getStoredTokens();
-
-    if (tokens.oauth_token) {
-      console.log('[UserService] Found OAuth token, fetching user profile...');
-      try {
-        await this.fetchAndUpdateUserProfile(tokens.oauth_token);
-      } catch (error) {
-        console.error('[UserService] Error fetching user profile:', error);
+    
+    if (this.authService.isAuthenticated()) {
+      const user = this.authService.getCurrentUser();
+      if (user) {
+        console.log('[UserService] User is authenticated, updating state...');
+        this.userStateSubject.next({
+          isLoggedIn: true,
+          user: user,
+          loading: false
+        });
+      } else {
+        console.log('[UserService] No user data found');
         this.setLoggedOut();
       }
     } else {
-      console.log('[UserService] No OAuth token found');
+      console.log('[UserService] Not authenticated');
       this.setLoggedOut();
-    }
-  }
-
-  private async fetchAndUpdateUserProfile(oauthToken: string) {
-    console.log('[UserService] Fetching GitHub user profile...');
-    
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${oauthToken}`,
-      'Accept': 'application/vnd.github+json'
-    });
-
-    try {
-      const user = await this.http.get<GitHubUser>(`${this.githubApiUrl}/user`, { headers }).toPromise();
-      
-      if (!user) {
-        throw new Error('No user data received');
-      }
-
-      console.log('[UserService] Successfully fetched user profile:', {
-        login: user.login,
-        name: user.name
-      });
-
-      this.userStateSubject.next({
-        isLoggedIn: true,
-        user: user,
-        loading: false
-      });
-    } catch (error) {
-      console.error('[UserService] Failed to fetch user profile:', error);
-      throw error;
     }
   }
 
@@ -99,18 +70,21 @@ export class UserService {
 
   async refreshUserProfile(): Promise<void> {
     console.log('[UserService] Refreshing user profile...');
-    const tokens = this.authService.getStoredTokens();
     
-    if (!tokens.oauth_token) {
-      console.log('[UserService] No OAuth token available for refresh');
+    if (!this.authService.isAuthenticated()) {
+      console.log('[UserService] Not authenticated for refresh');
       this.setLoggedOut();
       return;
     }
 
-    try {
-      await this.fetchAndUpdateUserProfile(tokens.oauth_token);
-    } catch (error) {
-      console.error('[UserService] Error refreshing user profile:', error);
+    const user = this.authService.getCurrentUser();
+    if (user) {
+      this.userStateSubject.next({
+        isLoggedIn: true,
+        user: user,
+        loading: false
+      });
+    } else {
       this.setLoggedOut();
     }
   }

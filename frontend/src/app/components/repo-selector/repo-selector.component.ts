@@ -28,7 +28,8 @@ export class RepoSelectorComponent implements OnInit {
     this.error = null;
 
     try {
-      this.repos = await this.githubReposService.getUserRepos().toPromise() ?? [];
+      const response = await this.githubReposService.getUserRepos().toPromise();
+      this.repos = response?.repositories || [];
     } catch (err) {
       this.error = 'Failed to fetch repositories. Please try again.';
       console.error('Error fetching repos:', err);

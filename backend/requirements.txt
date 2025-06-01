@@ -4,3 +4,4 @@ groq
 python-dotenv
 pymongo
 python-jwt
+colorama
