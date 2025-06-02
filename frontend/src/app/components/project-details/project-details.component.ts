@@ -315,13 +315,23 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       // Get the current project's configuration from the state
       const currentConfig = this.projectStates[this.projectId].deploymentConfig;
       
+      // Save the project configuration
       const updatedProject = await this.projectsService
         .saveProjectConfig(this.project._id, currentConfig)
         .toPromise();
 
       console.log('Configuration saved successfully:', updatedProject);
+
+      // Launch the Jenkins build
+      await this.projectsService
+        .launchBuild(this.project._id)
+        .toPromise();
+
+      console.log('Jenkins build launched successfully');
+
+      // Refresh the projects list
     } catch (error) {
-      console.error('Error saving configuration:', error);
+      console.error('Error during deployment:', error);
     }
   }
 
@@ -448,7 +458,7 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
         repo_full_name: this.project.repo_full_name
       };
 
-      const result = await this.http.get<{response: string}>('http://localhost:5000/chat', { params }).toPromise();
+      const result = await this.http.get<{response: string}>('http://localhost:5000/api/chat', { params }).toPromise();
       
       const assistantMessage: ChatMessage = {
         type: 'assistant',

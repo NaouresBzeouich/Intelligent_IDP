@@ -21,7 +21,7 @@ export class ChatComponent {
     if (!this.userInput.trim()) return;
 
     const params = new HttpParams().set('message', this.userInput);
-    this.http.get<any>('http://localhost:5000/chat', { params }).subscribe({
+    this.http.get<any>('http://localhost:5000/api/chat', { params }).subscribe({
       next: res => this.response = res.response,
       error: err => this.response = 'Error: ' + err.message
     });

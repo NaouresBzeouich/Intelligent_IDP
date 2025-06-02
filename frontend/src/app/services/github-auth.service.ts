@@ -142,13 +142,13 @@ export class GitHubAuthService {
 
   private async exchangeCodeForTokens(code: string, installation_id: string): Promise<AuthResponse> {
     console.log('[GitHubAuthService] Making request to backend:', {
-      url: `${this.backendUrl}/authorize`,
+      url: `${this.backendUrl}/api/authorize`,
       params: { code, installation_id }
     });
 
     try {
       const response = await firstValueFrom(
-        this.http.get<AuthResponse>(`${this.backendUrl}/authorize`, {
+        this.http.get<AuthResponse>(`${this.backendUrl}/api/authorize`, {
           params: { code, installation_id },
           withCredentials: true  // Enable sending and receiving cookies
         })

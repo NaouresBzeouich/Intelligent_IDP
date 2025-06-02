@@ -10,7 +10,7 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from bson import ObjectId
 from dotenv import load_dotenv
-from services.Jenkins import create_jenkinsfile_jobConfig
+from services.Jenkins import create_jenkinsfile_jobConfig, create_jenkins_pipeline
 from services.ansible import create_ansible_files
 from middleware.auth_middleware import AuthMiddleware
 from colorama import init, Fore, Back, Style
@@ -98,7 +98,7 @@ CLIENT_FOLDER = os.path.abspath('./clients')  # or './client' if same dir
 def serve_client(path):
     return send_from_directory(CLIENT_FOLDER, path)
 
-@app.route('/authorize', methods=['GET'])
+@app.route('/api/authorize', methods=['GET'])
 def authorize():
     code = request.args.get('code')
     installation_id = request.args.get('installation_id')
@@ -245,7 +245,7 @@ def github_webhook():
     print(payload)
     return jsonify({"status": "received"}), 200
 
-@app.route('/chat', methods=['GET'])
+@app.route('/api/chat', methods=['GET'])
 def chat():
     user_message = request.args["message"]
     # user_message = data.get("message", "")
@@ -924,6 +924,43 @@ def save_project_config(project_id):
     except Exception as e:
         return jsonify({
             "error": "Failed to save project configuration",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/projects/<project_id>/launch', methods=['POST'])
+@auth.require_auth
+def launch_jenkins_job(project_id):
+    try:
+        # Find the project and verify ownership
+        project = db.projects.find_one({
+            "_id": ObjectId(project_id),
+            "status": "active"
+        })
+
+        if not project:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        if project['owner']['id'] != request.user["id"]:
+            return jsonify({
+                "error": "Unauthorized to launch this project"
+            }), 403
+
+        # Create and trigger Jenkins pipeline
+        create_jenkins_pipeline(
+            user_id=request.user["id"],
+            project_name=project_id
+        )
+
+        return jsonify({
+            "message": "Jenkins pipeline created and triggered successfully",
+            "project_id": project_id
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to launch Jenkins pipeline",
             "details": str(e)
         }), 500
 

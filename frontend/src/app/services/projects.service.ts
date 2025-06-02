@@ -127,6 +127,14 @@ export class ProjectsService {
     );
   }
 
+  launchBuild(projectId: string): Observable<any> {
+    return this.http.post<any>(
+      `${this.backendUrl}/api/projects/${projectId}/launch`,
+      {},
+      { headers: this.getHeaders() }
+    );
+  }
+
   async addProject(repo: GitHubRepo): Promise<void> {
     try {
       if (!this.authService.isAuthenticated()) {

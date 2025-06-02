@@ -5,21 +5,21 @@ pipeline {
         stage('Download Dockerfile') {
             steps {
                 script {
-                    bat 'curl --fail --retry 3 --retry-delay 2 -o Dockerfile  https://tidy-definitely-sailfish.ngrok-free.app/clients/{{ user_id }}/{{ image_name }}/Dockerfile'
+                    bat 'curl -o Dockerfile  https://tidy-definitely-sailfish.ngrok-free.app/clients/124160661/683c9c2803ce7d2f45cd8cd7/Dockerfile'
                 }
             }
         }
 
         stage('Clone repo') {
             steps {
-                git url: '{{ public_repo_url }}', branch: '{{ branch }}'
+                git url: 'https://github.com/0marMejdi/BloggyDotTN', branch: 'master'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    bat 'docker build -t idpx/{{ image_name }} .'
+                    bat 'docker build -t idpx/683c9c2803ce7d2f45cd8cd7 .'
                 }
             }
         }
@@ -29,13 +29,13 @@ pipeline {
                 script {
                     withCredentials(
                         [usernamePassword(
-                            credentialsId: '{{ dockerhub_cred_Jenkins }}' , 
+                            credentialsId: 'dockerhub-IDP-X' , 
                             usernameVariable: 'DOCKERHUB_USER', 
                             passwordVariable: 'DOCKERHUB_PASS'
                         )]){
                            bat '''
                             echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
-                            docker push idpx/{{ image_name }}:latest
+                            docker push idpx/683c9c2803ce7d2f45cd8cd7:latest
                             '''
                             }
                         }

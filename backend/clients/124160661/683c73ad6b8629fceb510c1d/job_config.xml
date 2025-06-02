@@ -1,0 +1,56 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <actions/>
+  <description>Pipeline to build and push Docker image</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
+    <script>pipeline {
+    agent any
+    
+    stages {
+        stage(&#39;Download Dockerfile&#39;) {
+            steps {
+                script {
+                    bat &#39;curl --fail --retry 3 --retry-delay 2 -o Dockerfile  https://tidy-definitely-sailfish.ngrok-free.app/clients/124160661/683c73ad6b8629fceb510c1d/Dockerfile&#39;
+                }
+            }
+        }
+
+        stage(&#39;Clone repo&#39;) {
+            steps {
+                git url: &#39;https://github.com/NaouresBzeouich/Terraform-cloud&#39;, branch: &#39;main&#39;
+            }
+        }
+
+        stage(&#39;Build Docker Image&#39;) {
+            steps {
+                script {
+                    bat &#39;docker build -t idpx/683c73ad6b8629fceb510c1d .&#39;
+                }
+            }
+        }
+
+        stage(&#39;Push Docker Image&#39;) {
+            steps {
+                script {
+                    withCredentials(
+                        [usernamePassword(
+                            credentialsId: &#39;dockerhub-IDP-X&#39; , 
+                            usernameVariable: &#39;DOCKERHUB_USER&#39;, 
+                            passwordVariable: &#39;DOCKERHUB_PASS&#39;
+                        )]){
+                           bat &#39;&#39;&#39;
+                            echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                            docker push idpx/683c73ad6b8629fceb510c1d:latest
+                            &#39;&#39;&#39;
+                            }
+                        }
+            }
+        }
+    }
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+</flow-definition>

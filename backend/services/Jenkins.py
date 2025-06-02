@@ -23,12 +23,13 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
-def render_pipeline_script(public_repo_url,image_name,dockerhub_cred_Jenkins,branch="Main"):
+def render_pipeline_script(public_repo_url, image_name, dockerhub_cred_Jenkins, user_id, branch="Main"):
     template = env.get_template('Jenkinsfile.j2')
     return template.render(
         public_repo_url=public_repo_url,
         image_name=image_name,
         dockerhub_cred_Jenkins=dockerhub_cred_Jenkins,
+        user_id=user_id,
         branch=branch
     )
 
@@ -51,6 +52,7 @@ def create_jenkinsfile_jobConfig(user_id,repository_name,project_name=None,branc
         repository_name,
         project_name,
         dockerhub_cred_Jenkins,
+        user_id,
         branch
         )
     job_config = render_job_config(pipeline_script)
