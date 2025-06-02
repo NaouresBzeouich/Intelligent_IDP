@@ -1,0 +1,37 @@
+<div class="dashboard-container">
+  <h1>Deployments</h1>
+  
+  <div class="table-container">
+    <table class="deployments-table">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Project Name</th>
+          <th>Project ID</th>
+          <th>Deployed At</th>
+          <th>Public IP</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let deployment of deployments">
+          <td>
+            <div class="status-indicator" [class]="deployment.status">
+              <i class="status-icon" [class]="getStatusIcon(deployment.status)"></i>
+              <span class="status-text">{{ getStatusText(deployment.status) }}</span>
+            </div>
+          </td>
+          <td>{{ deployment.projectName }}</td>
+          <td>{{ deployment.projectId }}</td>
+          <td>{{ deployment.deployedAt | date:'medium' }}</td>
+          <td>{{ deployment.publicIp || 'N/A' }}</td>
+          <td>
+            <button class="view-btn" [routerLink]="['/projects', deployment.projectId]">
+              View Details
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div> 

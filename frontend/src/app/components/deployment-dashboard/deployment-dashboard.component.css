@@ -1,0 +1,90 @@
+.dashboard-container {
+  padding: 2rem;
+}
+
+h1 {
+  margin-bottom: 2rem;
+  color: #333;
+}
+
+.table-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow-x: auto;
+}
+
+.deployments-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+.deployments-table th,
+.deployments-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.deployments-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+}
+
+.deployments-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-text {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.failed .status-icon {
+  background-color: #dc3545;
+}
+
+.in_progress .status-icon {
+  background-color: #ffc107;
+  animation: pulse 1.5s infinite;
+}
+
+.completed .status-icon {
+  background-color: #28a745;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.view-btn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.9rem;
+}
+
+.view-btn:hover {
+  background-color: #0056b3;
+} 

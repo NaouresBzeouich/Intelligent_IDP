@@ -13,39 +13,17 @@ pipeline {
             }
         }
 
+        
+
         stage('Clone repo') {
             steps {
                 git url: '{{ public_repo_url }}', branch: '{{ branch }}'
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    bat 'docker build -t idpx/{{ image_name }} .'
-                }
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                script {
-                    withCredentials(
-                        [usernamePassword(
-                            credentialsId: '{{ dockerhub_cred_Jenkins }}' , 
-                            usernameVariable: 'DOCKERHUB_USER', 
-                            passwordVariable: 'DOCKERHUB_PASS'
-                        )]){
-                           bat '''
-                            echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
-                            docker push idpx/{{ image_name }}:latest
-                            '''
-                        }
-                }
-            }
-        }
-
+        
         {% if deployment_plan in ['aws', 'azure'] %}
+
         stage('Initialize Terraform') {
             steps {
                 script {
@@ -57,7 +35,7 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 script {
-                    bat 'terraform plan -out=tfplan'
+                    bat 'terraform plan -lock=false -out=tfplan '
                 }
             }
         }
@@ -65,10 +43,36 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 script {
-                    bat 'terraform apply -auto-approve tfplan -lock=false'
+                    bat 'terraform apply -auto-approve -lock=false tfplan '
                 }
             }
         }
         {% endif %}
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    bat 'docker build -t idpx/{{ image_name }} .'
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials(
+                        [usernamePassword(
+                            credentialsId: '{{ dockerhub_cred_Jenkins }}' , 
+                            usernameVariable: 'DOCKERHUB_USER', 
+                            passwordVariable: 'DOCKERHUB_PASS'
+                        )]){
+                            bat '''
+                            echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                            docker push idpx/{{ image_name }}:latest
+                            '''
+                        }
+                }
+            }
+        }
     }
+
+
 }
