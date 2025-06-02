@@ -1,8 +1,8 @@
 terraform {
   backend "http" {
-    address        = "https://tidy-definitely-sailfish.ngrok-free.app/terraform/state/683ce782cadbe51b2e247bbb"
-    lock_address   = "https://tidy-definitely-sailfish.ngrok-free.app/terraform/lock/683ce782cadbe51b2e247bbb"
-    unlock_address = "https://tidy-definitely-sailfish.ngrok-free.app/terraform/unlock/683ce782cadbe51b2e247bbb"
+    address        = "https://tidy-definitely-sailfish.ngrok-free.app/api/terraform/state/683ce782cadbe51b2e247bbb"
+    lock_address   = "https://tidy-definitely-sailfish.ngrok-free.app/api/terraform/state/683ce782cadbe51b2e247bbb/lock"
+    unlock_address = "https://tidy-definitely-sailfish.ngrok-free.app/api/terraform/state/683ce782cadbe51b2e247bbb/unlock"
     lock_method    = "POST"
     unlock_method  = "POST"
   }

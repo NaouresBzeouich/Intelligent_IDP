@@ -12,7 +12,7 @@ jenkins_api_token = os.getenv("JENKINS_API_TOKEN")
 jenkins_user = os.getenv("JENKINS_USER")
 dockerhub_username = os.getenv("DOCKERHUB_USERNAME")
 dockerhub_password = os.getenv("DOCKERHUB_PASSWORD")
-dockerhub_cred_Jenkins=os.getenv("DOCKERHUB_CREDS_FROM_JENKINS")
+dockerhub_cred_Jenkins = os.getenv("DOCKERHUB_CREDS_FROM_JENKINS")
 
 # === Jinja2 Template Render ===
 template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../templates/jenkins'))
@@ -23,14 +23,15 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
-def render_pipeline_script(public_repo_url, image_name, dockerhub_cred_Jenkins, user_id, branch="Main"):
+def render_pipeline_script(public_repo_url, image_name, dockerhub_cred_Jenkins, user_id, branch="Main", deployment_plan=None):
     template = env.get_template('Jenkinsfile.j2')
     return template.render(
         public_repo_url=public_repo_url,
         image_name=image_name,
         dockerhub_cred_Jenkins=dockerhub_cred_Jenkins,
         user_id=user_id,
-        branch=branch
+        branch=branch,
+        deployment_plan=deployment_plan
     )
 
 def render_job_config(pipeline_script):
@@ -40,11 +41,11 @@ def render_job_config(pipeline_script):
         pipeline_script=pipeline_script
     )
 
-def create_jenkinsfile_jobConfig(user_id,repository_name,project_name=None,branch="Main"):
+def create_jenkinsfile_jobConfig(user_id, repository_name, project_name=None, branch="Main", deployment_plan=None):
     if project_name is None:
         project_name = repository_name.split("/")[-1]
     
-    output_dir=f"clients/{user_id}/{project_name}"
+    output_dir = f"clients/{user_id}/{project_name}"
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
@@ -53,8 +54,9 @@ def create_jenkinsfile_jobConfig(user_id,repository_name,project_name=None,branc
         project_name,
         dockerhub_cred_Jenkins,
         user_id,
-        branch
-        )
+        branch,
+        deployment_plan
+    )
     job_config = render_job_config(pipeline_script)
     
     pipeline_script_path = os.path.join(output_dir, "Jenkinsfile")

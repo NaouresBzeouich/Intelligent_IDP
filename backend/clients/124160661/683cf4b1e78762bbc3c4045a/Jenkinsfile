@@ -2,10 +2,13 @@ pipeline {
     agent any
     
     stages {
-        stage('Download Dockerfile') {
+        stage('Download Files') {
             steps {
                 script {
-                    bat 'curl --fail --retry 3 --retry-delay 2 -o Dockerfile  https://tidy-definitely-sailfish.ngrok-free.app/clients/124160661/683cf4b1e78762bbc3c4045a/Dockerfile'
+                    bat 'curl  -o Dockerfile  https://tidy-definitely-sailfish.ngrok-free.app/clients/124160661/683cf4b1e78762bbc3c4045a/Dockerfile'
+                    
+                    bat 'curl  -o main.tf  https://tidy-definitely-sailfish.ngrok-free.app/clients/124160661/683cf4b1e78762bbc3c4045a/main.tf'
+                    
                 }
             }
         }
@@ -37,9 +40,35 @@ pipeline {
                             echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
                             docker push idpx/683cf4b1e78762bbc3c4045a:latest
                             '''
-                            }
                         }
+                }
             }
         }
+
+        
+        stage('Initialize Terraform') {
+            steps {
+                script {
+                    bat 'terraform init'
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                script {
+                    bat 'terraform plan -out=tfplan'
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                script {
+                    bat 'terraform apply -auto-approve tfplan'
+                }
+            }
+        }
+        
     }
 }

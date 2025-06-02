@@ -893,20 +893,14 @@ def save_project_config(project_id):
                 
                 if not save_success:
                     print(f"Warning: Failed to save Dockerfile: {save_message}")
-        # create terraform files
-        create_tf(
-            type=config['deploymentPlan'],
-            user_id=request.user["id"],
-            project_name=project_id
-        )
-        
-        # create_ansible_files(
-        #     user_id=request.user["id"],
-        #     project_name=project_id,
-        #     docker_image_name=project_id,
-            
-        #     )
-        # get from database the project by id
+
+        # Create terraform files if deployment plan is aws or azure
+        if config.get('deploymentPlan') in ['aws', 'azure']:
+            create_tf(
+                type=config['deploymentPlan'],
+                user_id=request.user["id"],
+                project_name=project_id
+            )
 
         # Get the updated project
         updated_project = db.projects.find_one({"_id": ObjectId(project_id)})
@@ -914,12 +908,16 @@ def save_project_config(project_id):
         updated_project['created_at'] = updated_project['created_at'].isoformat()
         if 'updated_at' in updated_project:
             updated_project['updated_at'] = updated_project['updated_at'].isoformat()
+
+        # Create Jenkins configuration with deployment plan
         create_jenkinsfile_jobConfig(
             user_id=request.user["id"],
             project_name=project_id,
             branch=updated_project["default_branch"],
-            repository_name=updated_project["repo_url"]
+            repository_name=updated_project["repo_url"],
+            deployment_plan=config.get('deploymentPlan')
         )
+
         return jsonify(updated_project)
 
     except Exception as e:
@@ -1097,7 +1095,7 @@ def lock_terraform_state(project_id):
             "details": str(e)
         }), 500
 
-@app.route('/api/terraform/state/<project_id>/unlock', methods=['DELETE'])
+@app.route('/api/terraform/state/<project_id>/unlock', methods=['POST'])
 def unlock_terraform_state(project_id):
     try:
         # Get project to find the user_id

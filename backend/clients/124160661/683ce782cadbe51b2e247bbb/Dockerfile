@@ -1,21 +1,13 @@
-# Build stage
-FROM node:18-alpine AS builder
+FROM node:20
 WORKDIR /app
 
-
+ENV BACKEND_URL="mongodb+srv://omar:ramo@cluster0.rt44zn0.mongodb.net/"
+ENV ENV_VAR_2=""
 
 COPY package*.json ./
 RUN npm install
 
 COPY . .
-RUN npm run build -- --configuration production --output-path=dist/app
 
-# Final stage
-FROM nginx:1.25-alpine
-
-
-RUN rm -rf /usr/share/nginx/html/*
-COPY --from=builder /app/dist/app/browser /usr/share/nginx/html
-
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 3000
+CMD ["node", "index.js"]
