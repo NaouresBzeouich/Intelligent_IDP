@@ -16,15 +16,12 @@ export class AuthInterceptor implements HttpInterceptor {
     const token = this.authService.getAuthToken();
     
     // Only add the token for requests to our backend
-    if (request.url.startsWith('http://localhost:5000')) {
-      request = request.clone({
-        withCredentials: true,  // Enable credentials for backend requests
-        setHeaders: token ? {
-          Authorization: `Bearer ${token}`
-        } : {}
-      });
-    }
-
+    request = request.clone({
+      withCredentials: true,  // Enable credentials for backend requests
+      setHeaders: token ? {
+        Authorization: `Bearer ${token}`
+      } : {}
+    })
     return next.handle(request);
   }
 } 

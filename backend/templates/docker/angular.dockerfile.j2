@@ -8,7 +8,7 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
-RUN npm run build -- --configuration production --output-path=dist/app
+RUN npm run ng build -- --output-path=dist/app
 
 # Final stage
 FROM nginx:1.25-alpine

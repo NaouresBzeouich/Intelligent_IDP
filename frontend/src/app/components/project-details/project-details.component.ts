@@ -9,6 +9,7 @@ import { debounceTime } from 'rxjs/operators';
 import { HighlightModule, HIGHLIGHT_OPTIONS } from 'ngx-highlightjs';
 import { HttpClient } from '@angular/common/http';
 import { MarkdownModule, MarkdownService } from 'ngx-markdown';
+import { environment } from '../../../environments/environment';
 
 interface ChatMessage {
   type: 'user' | 'assistant';
@@ -48,7 +49,10 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
   isLoading: boolean = false;
   isDockerfileVisible: boolean = true;
   techStacks: Stack[] = [];
+  message: string = '';
+  recommendation: string = '';
   private envVarsUpdate = new Subject<Record<string, string>>();
+  private readonly backendUrl = environment.backendUrl;
 
   // Dictionary to store all project-specific state
   projectStates: Record<string, {
@@ -458,7 +462,7 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
         repo_full_name: this.project.repo_full_name
       };
 
-      const result = await this.http.get<{response: string}>('http://localhost:5000/api/chat', { params }).toPromise();
+      const result = await this.http.get<{response: string}>(`${this.backendUrl}/api/chat`, { params }).toPromise();
       
       const assistantMessage: ChatMessage = {
         type: 'assistant',
@@ -485,6 +489,17 @@ export class ProjectDetailsComponent implements OnInit, OnDestroy {
       });
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  async getRecommendation() {
+    try {
+      const params = { message: this.message };
+      const result = await this.http.get<{response: string}>(`${this.backendUrl}/api/chat`, { params }).toPromise();
+      this.recommendation = result?.response || '';
+    } catch (error) {
+      console.error('Error getting recommendation:', error);
+      this.recommendation = 'Failed to get recommendation';
     }
   }
 

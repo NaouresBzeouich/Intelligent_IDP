@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RepoSelectorComponent } from '../../../components/repo-selector/repo-selector.component';
-import { GithubReposService, GitHubRepo } from '../../../services/github-repos.service';
+import { GitHubReposService, GitHubRepo } from '../../../services/github-repos.service';
 import { UserService } from '../../../services/user.service';
 import { ProjectsService } from '../../../services/projects.service';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -19,7 +19,7 @@ export class SidebarNewItemComponent {
   error: string | null = null;
 
   constructor(
-    private githubReposService: GithubReposService,
+    private githubReposService: GitHubReposService,
     private projectsService: ProjectsService,
     public userService: UserService
   ) {}

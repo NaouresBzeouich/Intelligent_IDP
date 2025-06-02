@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { GitHubAuthService } from './github-auth.service';
 import { GitHubRepo } from './github-repos.service';
 import { map } from 'rxjs/operators';
+import { environment } from 'src/environments/environment';
 
 export interface OnPremConfig {
   ipAddress: string;
@@ -54,7 +55,7 @@ export interface Project {
   providedIn: 'root'
 })
 export class ProjectsService {
-  private readonly backendUrl = 'http://localhost:5000';
+  private readonly backendUrl = environment.backendUrl;
   private projectsSubject = new BehaviorSubject<Project[]>([]);
   projects$ = this.projectsSubject.asObservable();
 

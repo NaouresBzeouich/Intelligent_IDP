@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 export interface GitHubRepo {
   id: number;
@@ -20,8 +21,8 @@ export interface ReposResponse {
 @Injectable({
   providedIn: 'root'
 })
-export class GithubReposService {
-  private readonly backendUrl = 'http://localhost:5000';
+export class GitHubReposService {
+  private readonly backendUrl = environment.backendUrl;
 
   constructor(private http: HttpClient) {}
 

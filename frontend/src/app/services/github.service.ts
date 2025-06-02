@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 interface ReposResponse {
   repositories: any[];
@@ -21,7 +22,7 @@ interface Repository {
   providedIn: 'root'
 })
 export class GitHubService {
-  private readonly backendUrl = 'http://localhost:5000';
+  private readonly backendUrl = environment.backendUrl;
 
   constructor(private http: HttpClient) {}
 

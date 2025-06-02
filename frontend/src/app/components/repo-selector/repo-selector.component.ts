@@ -1,6 +1,6 @@
 import { Component, OnInit, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { GithubReposService, GitHubRepo } from '../../services/github-repos.service';
+import { GitHubReposService, GitHubRepo } from '../../services/github-repos.service';
 
 @Component({
   selector: 'app-repo-selector',
@@ -17,7 +17,7 @@ export class RepoSelectorComponent implements OnInit {
   loading = false;
   error: string | null = null;
 
-  constructor(private githubReposService: GithubReposService) {}
+  constructor(private githubReposService: GitHubReposService) {}
 
   ngOnInit(): void {
     this.fetchRepos();

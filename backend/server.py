@@ -17,6 +17,7 @@ from colorama import init, Fore, Back, Style
 import glob
 from jinja2 import Environment, FileSystemLoader
 from services.terraform import create_tf
+import json
 
 # Initialize colorama
 init(autoreset=True)
@@ -961,6 +962,170 @@ def launch_jenkins_job(project_id):
     except Exception as e:
         return jsonify({
             "error": "Failed to launch Jenkins pipeline",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/terraform/state/<project_id>', methods=['GET'])
+def get_terraform_state(project_id):
+    try:
+        # Get project to find the user_id
+        project = db.projects.find_one({
+            "_id": ObjectId(project_id),
+            "status": "active"
+        })
+
+        if not project:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        # Define the state file path using project's user_id
+        state_dir = os.path.join('clients', str(project['user_id']), str(project_id))
+        state_file = os.path.join(state_dir, 'terraform.tfstate')
+
+        # If state file doesn't exist, return empty state
+        if not os.path.exists(state_file):
+            return jsonify({
+                "version": 4,
+                "terraform_version": "1.0.0",
+                "serial": 1,
+                "lineage": "",
+                "outputs": {},
+                "resources": []
+            })
+
+        # Read and return the state file
+        with open(state_file, 'r') as f:
+            state_data = json.loads(f.read())
+            return jsonify(state_data)
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to get Terraform state",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/terraform/state/<project_id>', methods=['POST'])
+def update_terraform_state(project_id):
+    try:
+        # Get project to find the user_id
+        project = db.projects.find_one({
+            "_id": ObjectId(project_id),
+            "status": "active"
+        })
+
+        if not project:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        # Get the state data from request
+        state_data = request.get_json()
+        
+        if not state_data:
+            return jsonify({
+                "error": "No state data provided"
+            }), 400
+
+        # Define the state file path using project's user_id
+        state_dir = os.path.join('clients', str(project['user_id']), str(project_id))
+        state_file = os.path.join(state_dir, 'terraform.tfstate')
+
+        # Create directory if it doesn't exist
+        os.makedirs(state_dir, exist_ok=True)
+
+        # Write the state file
+        with open(state_file, 'w') as f:
+            json.dump(state_data, f, indent=2)
+
+        return jsonify({
+            "message": "State updated successfully"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to update Terraform state",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/terraform/state/<project_id>/lock', methods=['POST'])
+def lock_terraform_state(project_id):
+    try:
+        # Get project to find the user_id
+        project = db.projects.find_one({
+            "_id": ObjectId(project_id),
+            "status": "active"
+        })
+
+        if not project:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        lock_info = request.get_json()
+        
+        if not lock_info:
+            return jsonify({
+                "error": "No lock info provided"
+            }), 400
+
+        # Define the lock file path using project's user_id
+        state_dir = os.path.join('clients', str(project['user_id']), str(project_id))
+        lock_file = os.path.join(state_dir, '.terraform.tfstate.lock')
+
+        # Create directory if it doesn't exist
+        os.makedirs(state_dir, exist_ok=True)
+
+        # Check if lock file exists
+        if os.path.exists(lock_file):
+            with open(lock_file, 'r') as f:
+                existing_lock = json.loads(f.read())
+                return jsonify(existing_lock), 423  # Locked status code
+
+        # Write the lock file
+        with open(lock_file, 'w') as f:
+            lock_info['locked_at'] = datetime.datetime.utcnow().isoformat()
+            json.dump(lock_info, f, indent=2)
+
+        return jsonify({
+            "message": "Lock acquired successfully"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to lock Terraform state",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/terraform/state/<project_id>/unlock', methods=['DELETE'])
+def unlock_terraform_state(project_id):
+    try:
+        # Get project to find the user_id
+        project = db.projects.find_one({
+            "_id": ObjectId(project_id),
+            "status": "active"
+        })
+
+        if not project:
+            return jsonify({
+                "error": "Project not found"
+            }), 404
+
+        # Define the lock file path using project's user_id
+        state_dir = os.path.join('clients', str(project['user_id']), str(project_id))
+        lock_file = os.path.join(state_dir, '.terraform.tfstate.lock')
+
+        # Remove the lock file if it exists
+        if os.path.exists(lock_file):
+            os.remove(lock_file)
+
+        return jsonify({
+            "message": "Lock released successfully"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to unlock Terraform state",
             "details": str(e)
         }), 500
 

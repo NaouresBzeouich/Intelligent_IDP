@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 interface AuthResponse {
   token: string;
@@ -19,9 +20,9 @@ interface OAuthCallbackData {
 
 @Injectable({ providedIn: 'root' })
 export class GitHubAuthService {
-  private readonly backendUrl = 'http://localhost:5000';
+  private readonly backendUrl = environment.backendUrl;
   clientId = 'YOUR_CLIENT_ID';
-  redirectUri = 'https://tidy-definitely-sailfish.ngrok-free.app/authorize';
+  redirectUri = `${environment.backendUrl}/authorize`;
   state = crypto.randomUUID();
   private popup: Window | null = null;
   private messageListener: ((event: MessageEvent) => void) | null = null;
