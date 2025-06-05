@@ -50,4 +50,6 @@ idp-intelligent-dashboard/
 │   └── workflows/
 └── README.md
 ```
-![alt text](Report/image.png)
+![alt text](Report/archi.png)
+```
+![alt text](Report/system-components.png)
