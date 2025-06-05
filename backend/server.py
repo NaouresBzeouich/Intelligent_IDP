@@ -36,14 +36,14 @@ def log_auth(message: str, level: str = "info"):
 # Load environment variables
 load_dotenv()
 
-CLIENT_ID = "Iv23lisM1NexfziQUTe3"
-CLIENT_SECRET = "7e1ebbb519925432abd377720b7a1c456edbb37a"
-APP_ID = 1344769
-PRIVATE_KEY_PATH = "idp-x.2025-05-30.private-key.pem"
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+APP_ID = os.getenv("APP_ID")
+PRIVATE_KEY_PATH = os.getenv("PRIVATE_KEY_PATH")
 
 # MongoDB Atlas configuration
-MONGO_URI = "mongodb+srv://omar:ramo@cluster0.rt44zn0.mongodb.net/idpx"
-DB_NAME = "idp_platform"
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("DB_NAME")    
 
 app = Flask(__name__)
 # Configure CORS
@@ -51,7 +51,7 @@ CORS(app, resources={
     r"/*": {
         "origins": [
             "http://localhost:4200",
-            "https://tidy-definitely-sailfish.ngrok-free.app"
+            os.getenv("APP_URL")
         ],
         "methods": ["GET", "POST", "OPTIONS", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization"],
@@ -76,7 +76,7 @@ except (ConnectionFailure, ServerSelectionTimeoutError) as e:
     print(f"Failed to connect to MongoDB Atlas: {str(e)}")
     raise
 
-client = Groq(api_key=("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"))
+client = Groq(api_key=(os.getenv("API_CLIENT_KEY")))
 
 # Load the private key for JWT signing
 with open(PRIVATE_KEY_PATH, "rb") as f:
