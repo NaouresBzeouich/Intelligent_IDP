@@ -37,19 +37,16 @@ An intelligent and automated DevOps platform that helps developers create, manag
 idp-intelligent-dashboard/
 ├── frontend/                
 ├── backend/                  
-├── infrastructure/           
 │   ├── templates/
-│   ├── aws/
-│   ├── azure/
-│   └── local/
-├── chatbot/                  # Chatbot logic (e.g., NLP models, prompts)
-├── pipelines/                # GitHub Actions workflows
-├── scripts/                  # CLI tools or setup scripts
-├── tests/                    # Unit & integration tests
-├── .github/                  # GitHub-specific files (issues, workflows)
-│   └── workflows/
+│   │   ├── Docker/
+│   │   ├── Jenkins/
+│   │   ├── terraform/
+│   │   └── ansible/
+│   └── Server.py
 └── README.md
 ```
+
 ![alt text](Report/archi.png)
-```
+
+
 ![alt text](Report/system-components.png)
